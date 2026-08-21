@@ -1,12 +1,24 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { appendHistory, DEFAULT_INTERESTS, loadConfig, loadTask, readHistory, saveConfig, saveTask } from './store.js';
+import {
+  appendHistory,
+  clearDailyArea,
+  DEFAULT_INTERESTS,
+  getFreshDailyArea,
+  loadConfig,
+  loadTask,
+  readHistory,
+  saveConfig,
+  saveTask,
+  setDailyArea
+} from './store.js';
 import { chooseMany, chooseOne, confirm, heading, inputText, note } from './ui.js';
 import { codexAvailable, runCodex, runCodexJson } from './codex.js';
 import { areasPrompt, lessonPrompt, smartPrompt, topicsPrompt } from './prompts.js';
 import { installHook, buildHookCommand } from './hook.js';
 import { openLearningTerminal } from './terminal.js';
+import { focusLessonView, renderLesson } from './lesson-view.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const smartSchema = path.join(here, 'schemas', 'smart.schema.json');
@@ -20,7 +32,7 @@ function argValue(args, name) {
 }
 
 function printHelp() {
-  console.log(`3Things — learn three things from the Codex tasks you already do.\n\nCommands:\n  3things init         Install Codex hook and configure 3Things\n  3things config       Change trigger behavior and preferences\n  3things interests    Change learning interests\n  3things history      Show recently learned topics\n  3things              Learn from the latest captured Codex task\n  3things on|off       Temporarily enable or disable automatic launch\n\nTrigger modes:\n  every   Launch for every Codex prompt\n  smart   Launch only when the task has useful learning value\n  manual  Never auto-launch; run 3things yourself\n`);
+  console.log(`3Things — learn three things from the Codex tasks you already do.\n\nCommands:\n  3things init         Install Codex hook and configure 3Things\n  3things config       Change trigger behavior and preferences\n  3things interests    Change learning interests\n  3things area         Clear today's learning area\n  3things history      Show recently learned topics\n  3things              Learn from the latest captured Codex task\n  3things on|off       Temporarily enable or disable automatic launch\n\nTrigger modes:\n  every   Launch for every Codex prompt\n  smart   Launch only when the task has useful learning value\n  manual  Never auto-launch; run 3things yourself\n`);
 }
 
 async function configureInterests(config) {
@@ -122,17 +134,15 @@ function recentTopicTitles() {
   return readHistory(30).map((x) => x.topic).filter(Boolean);
 }
 
-async function learnCommand(eventFile = null) {
-  const task = loadTask(eventFile || undefined);
-  if (!task) {
-    console.log('No Codex task captured yet. Run Codex once, or use `3things init` first.');
-    return;
+async function chooseLearningArea(task, config, { changeArea = false } = {}) {
+  const dailyArea = changeArea ? null : getFreshDailyArea(config);
+  if (dailyArea) {
+    note(`You are learning ${dailyArea} today.`);
+    console.log('Need to change? Run `3things area`, then run `3things` again.');
+    return dailyArea;
   }
-  const config = loadConfig();
-  heading('3Things');
-  console.log(`From your task:\n${task.prompt.trim()}\n`);
-  note('Finding useful learning directions…');
 
+  note('Finding useful learning directions…');
   const areas = runCodexJson(areasPrompt(task, config), {
     cwd: task.cwd,
     model: config.model,
@@ -143,6 +153,22 @@ async function learnCommand(eventFile = null) {
     value: item.name,
     label: `${item.source === 'suggested' ? '★ ' : ''}${item.name} — ${item.reason}`
   })));
+
+  setDailyArea(config, area);
+  saveConfig(config);
+  return area;
+}
+
+async function learnCommand(eventFile = null, { changeArea = false } = {}) {
+  const task = loadTask(eventFile || undefined);
+  if (!task) {
+    console.log('No Codex task captured yet. Run Codex once, or use `3things init` first.');
+    return;
+  }
+  const config = loadConfig();
+  heading('3Things');
+  console.log(`From your task:\n${task.prompt.trim()}\n`);
+  const area = await chooseLearningArea(task, config, { changeArea });
 
   note(`Finding 3 things in ${area}…`);
   const topics = runCodexJson(topicsPrompt(task, area, recentTopicTitles()), {
@@ -165,7 +191,9 @@ async function learnCommand(eventFile = null) {
     cwd: task.cwd,
     model: config.model
   });
-  console.log(lesson);
+  const rendered = renderLesson(lesson, { area, topics: selectedTopics });
+  console.log(rendered.text);
+  await focusLessonView(rendered.lessons);
 
   if (config.rememberLearnedTopics) {
     for (const topic of selectedTopics) {
@@ -201,15 +229,23 @@ function toggle(enabled) {
   console.log(`3Things automatic launch is ${enabled ? 'on' : 'off'}.`);
 }
 
+function areaCommand() {
+  const config = loadConfig();
+  clearDailyArea(config);
+  saveConfig(config);
+  console.log("Cleared today's learning area. Next `3things` run will ask what you want to learn.");
+}
+
 export async function main(args) {
   const [command] = args;
   if (!command) return learnCommand();
   if (command === 'init') return init();
   if (command === 'config') return configCommand();
   if (command === 'interests') return interestsCommand();
+  if (command === 'area') return areaCommand();
   if (command === 'history') return historyCommand();
   if (command === 'hook') return hookCommand();
-  if (command === 'learn') return learnCommand(argValue(args, '--event'));
+  if (command === 'learn') return learnCommand(argValue(args, '--event'), { changeArea: args.includes('--change-area') });
   if (command === 'on') return toggle(true);
   if (command === 'off') return toggle(false);
   if (command === 'help' || command === '--help' || command === '-h') return printHelp();

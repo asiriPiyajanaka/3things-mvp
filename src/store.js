@@ -20,8 +20,33 @@ export const DEFAULT_CONFIG = {
   interests: ['Frontend', 'Backend', 'Architecture', 'DevOps', 'Testing'],
   suggestOutsideInterests: true,
   rememberLearnedTopics: true,
+  dailyLearningArea: null,
   model: null
 };
+
+export const DAILY_AREA_TTL_MS = 24 * 60 * 60 * 1000;
+
+export function getFreshDailyArea(config, now = new Date()) {
+  const area = config.dailyLearningArea;
+  if (!area || typeof area.name !== 'string' || !area.name.trim()) return null;
+  const selectedAt = Date.parse(area.selectedAt);
+  if (!Number.isFinite(selectedAt)) return null;
+  if (now.getTime() - selectedAt >= DAILY_AREA_TTL_MS) return null;
+  return area.name.trim();
+}
+
+export function setDailyArea(config, name, now = new Date()) {
+  config.dailyLearningArea = {
+    name,
+    selectedAt: now.toISOString()
+  };
+  return config;
+}
+
+export function clearDailyArea(config) {
+  config.dailyLearningArea = null;
+  return config;
+}
 
 export function ensureHome() {
   fs.mkdirSync(tasksDir, { recursive: true, mode: 0o700 });

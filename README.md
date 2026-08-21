@@ -73,6 +73,7 @@ Submit a task. With `smart` or `every` mode, 3Things can open a second terminal 
 3things init
 3things config
 3things interests
+3things area
 3things history
 3things
 3things on
@@ -80,6 +81,13 @@ Submit a task. With `smart` or `every` mode, 3Things can open a second terminal 
 ```
 
 `3things` with no subcommand uses the latest captured Codex task.
+
+After you choose a learning area, 3Things reuses it for 24 hours so new lesson terminals can go straight to the three concepts. To change it sooner:
+
+```bash
+3things area
+3things
+```
 
 ## Local data
 
