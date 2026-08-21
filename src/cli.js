@@ -131,7 +131,7 @@ async function hookCommand() {
 }
 
 function recentTopicTitles() {
-  return readHistory(30).map((x) => x.topic).filter(Boolean);
+  return readHistory(80).map((x) => x.topic).filter(Boolean);
 }
 
 async function chooseLearningArea(task, config, { changeArea = false } = {}) {
