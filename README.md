@@ -72,6 +72,7 @@ Submit a task. With `smart` or `every` mode, 3Things can open a second terminal 
 ```bash
 3things init
 3things config
+3things reset
 3things interests
 3things area
 3things history
@@ -82,12 +83,19 @@ Submit a task. With `smart` or `every` mode, 3Things can open a second terminal 
 
 `3things` with no subcommand uses the latest captured Codex task.
 
+`3things reset` resets local configuration to defaults and immediately reruns the setup questions.
+
 After you choose a learning area, 3Things reuses it for 24 hours so new lesson terminals can go straight to the three concepts. To change it sooner:
 
 ```bash
 3things area
 3things
 ```
+
+Terminal mode is configurable:
+
+- `new` opens a new learning terminal for each launched lesson.
+- `single` keeps one learning terminal active at a time. While a lesson is active, new Codex prompts are still captured, but another learning terminal is not opened. Complete the current lesson, then run `3things` in that terminal to learn from the latest captured task.
 
 ## Local data
 
@@ -97,6 +105,7 @@ After you choose a learning area, 3Things reuses it for 24 hours so new lesson t
 ~/.3things/
   config.json
   latest-task.json
+  learning-session.json
   history.jsonl
   tasks/
 ```

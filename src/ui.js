@@ -2,6 +2,33 @@ import readline from 'node:readline';
 
 const CLEAR_LINE = '\x1b[2K\r';
 const CURSOR_UP = (n) => n > 0 ? `\x1b[${n}A` : '';
+const ANSI_RESET = '\x1b[0m';
+const ANSI_INVERSE = '\x1b[7m';
+const ANSI_BOLD = '\x1b[1m';
+
+function colorEnabled() {
+  return process.stdout.isTTY && !process.env.NO_COLOR;
+}
+
+function visibleWidth(text) {
+  return String(text).replace(/\x1b\[[0-9;]*m/g, '').length;
+}
+
+function fitLine(text) {
+  const width = Math.max(24, (process.stdout.columns || 88) - 1);
+  if (visibleWidth(text) <= width) return text;
+  const plain = String(text).replace(/\x1b\[[0-9;]*m/g, '');
+  return `${plain.slice(0, Math.max(1, width - 1))}…`;
+}
+
+function activeLine(text) {
+  const line = fitLine(text);
+  return colorEnabled() ? `${ANSI_INVERSE}${ANSI_BOLD}${line}${ANSI_RESET}` : line;
+}
+
+function menuLine(text, active = false) {
+  return active ? activeLine(text) : fitLine(text);
+}
 
 export function heading(title) {
   console.log(`\n┌${'─'.repeat(Math.max(18, title.length + 4))}┐`);
@@ -51,7 +78,10 @@ export async function chooseOne(question, options) {
 
   const render = () => {
     if (rendered) process.stdout.write(CURSOR_UP(rendered));
-    const lines = [question, ...options.map((o, i) => `${i === index ? '❯' : ' '} ${o.label}`)];
+    const lines = [
+      fitLine(question),
+      ...options.map((o, i) => menuLine(`${i === index ? '❯' : ' '} ${o.label}`, i === index))
+    ];
     for (const line of lines) process.stdout.write(`${CLEAR_LINE}${line}\n`);
     rendered = lines.length;
   };
@@ -102,9 +132,9 @@ export async function chooseMany(question, options, selectedValues = []) {
   const render = () => {
     if (rendered) process.stdout.write(CURSOR_UP(rendered));
     const lines = [
-      question,
-      '(↑/↓ move, space toggle, enter save)',
-      ...options.map((o, i) => `${i === index ? '❯' : ' '} [${selected.has(o.value) ? 'x' : ' '}] ${o.label}`)
+      fitLine(question),
+      fitLine('(up/down move, space toggle, enter save)'),
+      ...options.map((o, i) => menuLine(`${i === index ? '❯' : ' '} [${selected.has(o.value) ? 'x' : ' '}] ${o.label}`, i === index))
     ];
     for (const line of lines) process.stdout.write(`${CLEAR_LINE}${line}\n`);
     rendered = lines.length;

@@ -10,6 +10,10 @@ test('3Things keeps exactly-three behavior out of config', () => {
   assert.equal(Object.hasOwn(DEFAULT_CONFIG, 'thingsPerTask'), false);
 });
 
+test('default learning terminal mode opens a new terminal per lesson', () => {
+  assert.equal(DEFAULT_CONFIG.learningTerminalMode, 'new');
+});
+
 test('daily learning area is fresh for less than 24 hours', () => {
   const config = structuredClone(DEFAULT_CONFIG);
   setDailyArea(config, 'Frontend', new Date('2026-08-21T00:00:00.000Z'));

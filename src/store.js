@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { configPath, historyPath, homeDir, latestTaskPath, tasksDir } from './paths.js';
+import { configPath, historyPath, learningSessionPath, latestTaskPath, tasksDir } from './paths.js';
 
 export const DEFAULT_INTERESTS = [
   'Frontend',
@@ -21,10 +21,16 @@ export const DEFAULT_CONFIG = {
   suggestOutsideInterests: true,
   rememberLearnedTopics: true,
   dailyLearningArea: null,
+  learningTerminalMode: 'new',
   model: null
 };
 
 export const DAILY_AREA_TTL_MS = 24 * 60 * 60 * 1000;
+export const LEARNING_SESSION_RESERVATION_MS = 5 * 60 * 1000;
+
+export function freshConfig() {
+  return structuredClone(DEFAULT_CONFIG);
+}
 
 export function getFreshDailyArea(config, now = new Date()) {
   const area = config.dailyLearningArea;
@@ -48,6 +54,16 @@ export function clearDailyArea(config) {
   return config;
 }
 
+function processIsAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function ensureHome() {
   fs.mkdirSync(tasksDir, { recursive: true, mode: 0o700 });
 }
@@ -62,18 +78,56 @@ export function loadConfig() {
   ensureHome();
   if (!fs.existsSync(configPath)) {
     writePrivateJson(configPath, DEFAULT_CONFIG);
-    return structuredClone(DEFAULT_CONFIG);
+    return freshConfig();
   }
   try {
     const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     return { ...DEFAULT_CONFIG, ...parsed };
   } catch {
-    return structuredClone(DEFAULT_CONFIG);
+    return freshConfig();
   }
 }
 
 export function saveConfig(config) {
   writePrivateJson(configPath, config);
+}
+
+export function resetConfig() {
+  const config = freshConfig();
+  saveConfig(config);
+  clearLearningSession();
+  return config;
+}
+
+export function markLearningSession(session = {}) {
+  writePrivateJson(learningSessionPath, {
+    pid: session.pid ?? process.pid,
+    eventFile: session.eventFile ?? null,
+    startedAt: new Date().toISOString()
+  });
+}
+
+export function clearLearningSession() {
+  try { fs.rmSync(learningSessionPath, { force: true }); } catch {}
+}
+
+export function hasActiveLearningSession(now = new Date()) {
+  if (!fs.existsSync(learningSessionPath)) return false;
+  let session;
+  try {
+    session = JSON.parse(fs.readFileSync(learningSessionPath, 'utf8'));
+  } catch {
+    clearLearningSession();
+    return false;
+  }
+
+  if (processIsAlive(session.pid)) return true;
+
+  const startedAt = Date.parse(session.startedAt);
+  if (Number.isFinite(startedAt) && now.getTime() - startedAt < LEARNING_SESSION_RESERVATION_MS) return true;
+
+  clearLearningSession();
+  return false;
 }
 
 export function saveTask(event) {

@@ -4,11 +4,15 @@ import { fileURLToPath } from 'node:url';
 import {
   appendHistory,
   clearDailyArea,
+  clearLearningSession,
   DEFAULT_INTERESTS,
   getFreshDailyArea,
+  hasActiveLearningSession,
   loadConfig,
   loadTask,
+  markLearningSession,
   readHistory,
+  resetConfig,
   saveConfig,
   saveTask,
   setDailyArea
@@ -32,7 +36,7 @@ function argValue(args, name) {
 }
 
 function printHelp() {
-  console.log(`3Things — learn three things from the Codex tasks you already do.\n\nCommands:\n  3things init         Install Codex hook and configure 3Things\n  3things config       Change trigger behavior and preferences\n  3things interests    Change learning interests\n  3things area         Clear today's learning area\n  3things history      Show recently learned topics\n  3things              Learn from the latest captured Codex task\n  3things on|off       Temporarily enable or disable automatic launch\n\nTrigger modes:\n  every   Launch for every Codex prompt\n  smart   Launch only when the task has useful learning value\n  manual  Never auto-launch; run 3things yourself\n`);
+  console.log(`3Things — learn three things from the Codex tasks you already do.\n\nCommands:\n  3things init         Install Codex hook and configure 3Things\n  3things config       Change trigger behavior and preferences\n  3things reset        Reset config and run setup again\n  3things interests    Change learning interests\n  3things area         Clear today's learning area\n  3things history      Show recently learned topics\n  3things              Learn from the latest captured Codex task\n  3things on|off       Temporarily enable or disable automatic launch\n\nTrigger modes:\n  every   Launch for every Codex prompt\n  smart   Launch only when the task has useful learning value\n  manual  Never auto-launch; run 3things yourself\n`);
 }
 
 async function configureInterests(config) {
@@ -54,6 +58,10 @@ async function configure(config) {
     { label: 'Smart — only useful learning tasks (recommended)', value: 'smart' },
     { label: 'Every Codex task', value: 'every' },
     { label: 'Manual only', value: 'manual' }
+  ]);
+  config.learningTerminalMode = await chooseOne('How should learning terminals open?', [
+    { label: 'Open a new terminal for each lesson', value: 'new' },
+    { label: 'Use one learning terminal at a time', value: 'single' }
   ]);
   config.suggestOutsideInterests = await confirm('Suggest useful areas outside my interests?', config.suggestOutsideInterests);
   return config;
@@ -83,7 +91,17 @@ async function configCommand() {
   let config = loadConfig();
   config = await configure(config);
   saveConfig(config);
-  console.log(`\n✓ Saved. Trigger: ${config.trigger}`);
+  console.log(`\n✓ Saved. Trigger: ${config.trigger}. Terminal mode: ${config.learningTerminalMode}.`);
+}
+
+async function resetCommand() {
+  heading('3Things reset');
+  let config = resetConfig();
+  console.log('Config reset to defaults. Re-running setup questions.');
+  config = await configure(config);
+  config = await configureInterests(config);
+  saveConfig(config);
+  console.log(`\n✓ Saved. Trigger: ${config.trigger}. Terminal mode: ${config.learningTerminalMode}.`);
 }
 
 async function interestsCommand() {
@@ -127,7 +145,14 @@ async function hookCommand() {
     }
   }
 
-  openLearningTerminal(eventFile);
+  if (config.learningTerminalMode === 'single') {
+    if (hasActiveLearningSession()) return;
+    markLearningSession({ pid: null, eventFile });
+  }
+
+  if (!openLearningTerminal(eventFile) && config.learningTerminalMode === 'single') {
+    clearLearningSession();
+  }
 }
 
 function recentTopicTitles() {
@@ -166,47 +191,57 @@ async function learnCommand(eventFile = null, { changeArea = false } = {}) {
     return;
   }
   const config = loadConfig();
+  markLearningSession({ eventFile: eventFile || null });
   heading('3Things');
-  console.log(`From your task:\n${task.prompt.trim()}\n`);
-  const area = await chooseLearningArea(task, config, { changeArea });
-
-  note(`Finding 3 things in ${area}…`);
-  const topics = runCodexJson(topicsPrompt(task, area, recentTopicTitles()), {
-    cwd: task.cwd,
-    model: config.model,
-    schema: topicsSchema
-  }).topics;
-
-  const chosen = await chooseOne('\nPick your 3Things lesson:', [
-    ...topics.map((topic, index) => ({
-      value: [index],
-      label: `${index + 1}. ${topic.title} — ${topic.why}`
-    })),
-    { value: [0, 1, 2], label: 'All 3' }
-  ]);
-
-  const selectedTopics = chosen.map((i) => topics[i]);
-  console.log('\nLearning…\n');
-  const lesson = runCodex(lessonPrompt(task, area, selectedTopics), {
-    cwd: task.cwd,
-    model: config.model
-  });
-  const rendered = renderLesson(lesson, { area, topics: selectedTopics });
-  console.log(rendered.text);
-  await focusLessonView(rendered.lessons);
-
-  if (config.rememberLearnedTopics) {
-    for (const topic of selectedTopics) {
-      appendHistory({
-        learnedAt: new Date().toISOString(),
-        area,
-        topic: topic.title,
-        task: task.prompt.slice(0, 500),
-        cwd: task.cwd
-      });
+  try {
+    if (config.learningTerminalMode === 'single') {
+      note('Single-terminal mode is on. Complete this learning, then run `3things` here for the latest captured task.');
+      console.log('Want a new terminal every time? Run `3things config` and change terminal mode.\n');
     }
+    console.log(`From your task:\n${task.prompt.trim()}\n`);
+    const area = await chooseLearningArea(task, config, { changeArea });
+
+    note(`Finding 3 things in ${area}…`);
+    const topics = runCodexJson(topicsPrompt(task, area, recentTopicTitles()), {
+      cwd: task.cwd,
+      model: config.model,
+      schema: topicsSchema
+    }).topics;
+
+    const chosen = await chooseOne('\nPick your 3Things lesson:', [
+      ...topics.map((topic, index) => ({
+        value: [index],
+        label: `${index + 1}. ${topic.title} — ${topic.why}`
+      })),
+      { value: [0, 1, 2], label: 'All 3' }
+    ]);
+
+    const selectedTopics = chosen.map((i) => topics[i]);
+    console.log('\nLearning…\n');
+    const lesson = runCodex(lessonPrompt(task, area, selectedTopics), {
+      cwd: task.cwd,
+      model: config.model
+    });
+    const rendered = renderLesson(lesson, { area, topics: selectedTopics });
+    console.log(rendered.text);
+    await focusLessonView(rendered.lessons);
+
+    if (config.rememberLearnedTopics) {
+      for (const topic of selectedTopics) {
+        appendHistory({
+          learnedAt: new Date().toISOString(),
+          area,
+          topic: topic.title,
+          task: task.prompt.slice(0, 500),
+          cwd: task.cwd
+        });
+      }
+    }
+
+    console.log('\n✓ Saved to 3Things history.');
+  } finally {
+    clearLearningSession();
   }
-  console.log('\n✓ Saved to 3Things history.');
 }
 
 function historyCommand() {
@@ -241,6 +276,7 @@ export async function main(args) {
   if (!command) return learnCommand();
   if (command === 'init') return init();
   if (command === 'config') return configCommand();
+  if (command === 'reset') return resetCommand();
   if (command === 'interests') return interestsCommand();
   if (command === 'area') return areaCommand();
   if (command === 'history') return historyCommand();
