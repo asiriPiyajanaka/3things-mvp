@@ -73,6 +73,7 @@ Submit a task. With `smart` or `every` mode, 3Things can open a second terminal 
 3things init
 3things config
 3things reset
+3things signoff
 3things interests
 3things area
 3things history
@@ -84,6 +85,8 @@ Submit a task. With `smart` or `every` mode, 3Things can open a second terminal 
 `3things` with no subcommand uses the latest captured Codex task.
 
 `3things reset` resets local configuration to defaults and immediately reruns the setup questions.
+
+`3things signoff` removes local 3Things state under `~/.3things`. Run `3things init` later to start again.
 
 After you choose a learning area, 3Things reuses it for 24 hours so new lesson terminals can go straight to the three concepts. To change it sooner:
 

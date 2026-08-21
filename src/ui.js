@@ -25,13 +25,37 @@ function fitLine(text) {
   return `${plain.slice(0, Math.max(1, width - 1))}…`;
 }
 
-function activeLine(text) {
-  const line = fitLine(text);
-  return colorEnabled() ? `${ANSI_INVERSE}${ANSI_BOLD}${line}${ANSI_RESET}` : line;
+function terminalLineWidth() {
+  return Math.max(24, Math.min(process.stdout.columns || 88, 110) - 2);
 }
 
-function menuLine(text, active = false) {
-  return active ? activeLine(text) : fitLine(text);
+function wrapPlain(text, width) {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+
+  for (const word of words) {
+    if (!line) {
+      line = word;
+    } else if (`${line} ${word}`.length <= width) {
+      line += ` ${word}`;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function menuLines({ marker, label, active = false, width = terminalLineWidth() }) {
+  const firstPrefix = `${marker} `;
+  const restPrefix = ' '.repeat(visibleWidth(firstPrefix));
+  const wrapped = wrapPlain(label, Math.max(16, width - visibleWidth(firstPrefix)));
+  const lines = wrapped.map((part, index) => `${index === 0 ? firstPrefix : restPrefix}${part}`);
+
+  if (!active || !colorEnabled()) return lines;
+  return lines.map((line) => `${ANSI_INVERSE}${ANSI_BOLD}${line}${ANSI_RESET}`);
 }
 
 function questionLines(question) {
@@ -42,6 +66,13 @@ function writeMenu(lines) {
   process.stdout.write(WRAP_OFF);
   for (const line of lines) process.stdout.write(`${CLEAR_LINE}${line}\n`);
   process.stdout.write(WRAP_ON);
+}
+
+function clearRenderedMenu(lines) {
+  if (!lines) return;
+  process.stdout.write(CURSOR_UP(lines));
+  for (let i = 0; i < lines; i++) process.stdout.write(`${CLEAR_LINE}\n`);
+  process.stdout.write(CURSOR_UP(lines));
 }
 
 export function heading(title) {
@@ -60,7 +91,72 @@ export function muted(text) {
 }
 
 export function clearScreen() {
-  if (process.stdout.isTTY) process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
+  if (process.stdout.isTTY) process.stdout.write('\x1b[H\x1b[2J\x1b[3J');
+}
+
+function revealChunks(text) {
+  return String(text).match(/\s+|\S+/g) || [];
+}
+
+export async function revealText(text, { delayMs = 8 } = {}) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    process.stdout.write(text);
+    return;
+  }
+
+  readline.emitKeypressEvents(process.stdin);
+  const wasRaw = process.stdin.isRaw;
+  let skip = false;
+  let cancelled = false;
+
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+
+  await new Promise((resolve, reject) => {
+    let index = 0;
+    const chunks = revealChunks(text);
+    let timer = null;
+
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      process.stdin.off('keypress', onKey);
+      process.stdin.setRawMode(Boolean(wasRaw));
+      process.stdin.pause();
+    };
+
+    const finish = () => {
+      cleanup();
+      resolve();
+    };
+
+    const onKey = (_str, key) => {
+      if (key?.ctrl && key.name === 'c') {
+        cancelled = true;
+        cleanup();
+        reject(new Error('Cancelled'));
+        return;
+      }
+      skip = true;
+    };
+
+    const step = () => {
+      if (cancelled) return;
+      if (skip) {
+        process.stdout.write(chunks.slice(index).join(''));
+        finish();
+        return;
+      }
+      if (index >= chunks.length) {
+        finish();
+        return;
+      }
+      process.stdout.write(chunks[index++]);
+      timer = setTimeout(step, delayMs);
+    };
+
+    process.stdin.on('keypress', onKey);
+    step();
+  });
 }
 
 export async function withSpinner(text, action) {
@@ -129,8 +225,12 @@ export async function chooseOne(question, options) {
     if (rendered) process.stdout.write(CURSOR_UP(rendered));
     const lines = [
       ...questionLines(question),
-      ...options.map((o, i) => menuLine(`${i === index ? '❯' : ' '} ${o.label}`, i === index))
-    ];
+      ...options.flatMap((o, i) => menuLines({
+        marker: i === index ? '❯' : ' ',
+        label: o.label,
+        active: i === index
+      }))
+    ].map((line) => fitLine(line));
     writeMenu(lines);
     rendered = lines.length;
   };
@@ -153,6 +253,7 @@ export async function chooseOne(question, options) {
       else if (key?.name === 'down') index = (index + 1) % options.length;
       else if (key?.name === 'return') {
         cleanup();
+        clearRenderedMenu(rendered);
         resolve(options[index].value);
         return;
       } else return;
@@ -183,8 +284,12 @@ export async function chooseMany(question, options, selectedValues = []) {
     const lines = [
       ...questionLines(question),
       fitLine('(up/down move, space toggle, enter save)'),
-      ...options.map((o, i) => menuLine(`${i === index ? '❯' : ' '} [${selected.has(o.value) ? 'x' : ' '}] ${o.label}`, i === index))
-    ];
+      ...options.flatMap((o, i) => menuLines({
+        marker: `${i === index ? '❯' : ' '} [${selected.has(o.value) ? 'x' : ' '}]`,
+        label: o.label,
+        active: i === index
+      }))
+    ].map((line) => fitLine(line));
     writeMenu(lines);
     rendered = lines.length;
   };
@@ -210,6 +315,7 @@ export async function chooseMany(question, options, selectedValues = []) {
         selected.has(value) ? selected.delete(value) : selected.add(value);
       } else if (key?.name === 'return') {
         cleanup();
+        clearRenderedMenu(rendered);
         resolve([...selected]);
         return;
       } else return;

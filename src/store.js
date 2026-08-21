@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { configPath, historyPath, learningSessionPath, latestTaskPath, tasksDir } from './paths.js';
+import { configPath, historyPath, homeDir, learningSessionPath, latestTaskPath, tasksDir } from './paths.js';
 
 export const DEFAULT_INTERESTS = [
   'Frontend',
@@ -97,6 +97,10 @@ export function resetConfig() {
   saveConfig(config);
   clearLearningSession();
   return config;
+}
+
+export function signOff() {
+  fs.rmSync(homeDir, { recursive: true, force: true });
 }
 
 export function markLearningSession(session = {}) {

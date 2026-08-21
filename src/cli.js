@@ -15,9 +15,10 @@ import {
   resetConfig,
   saveConfig,
   saveTask,
-  setDailyArea
+  setDailyArea,
+  signOff
 } from './store.js';
-import { chooseMany, chooseOne, confirm, heading, inputText, muted, note, clearScreen, withSpinner } from './ui.js';
+import { chooseMany, chooseOne, confirm, heading, inputText, muted, note, clearScreen, revealText, withSpinner } from './ui.js';
 import { codexAvailable, runCodex, runCodexAsync, runCodexJson, runCodexJsonAsync } from './codex.js';
 import { areasPrompt, lessonPrompt, smartPrompt, topicsPrompt } from './prompts.js';
 import { installHook, buildHookCommand } from './hook.js';
@@ -36,7 +37,7 @@ function argValue(args, name) {
 }
 
 function printHelp() {
-  console.log(`3Things — learn three things from the Codex tasks you already do.\n\nCommands:\n  3things init         Install Codex hook and configure 3Things\n  3things config       Change trigger behavior and preferences\n  3things reset        Reset config and run setup again\n  3things interests    Change learning interests\n  3things area         Clear today's learning area\n  3things history      Show recently learned topics\n  3things              Learn from the latest captured Codex task\n  3things on|off       Temporarily enable or disable automatic launch\n\nTrigger modes:\n  every   Launch for every Codex prompt\n  smart   Launch only when the task has useful learning value\n  manual  Never auto-launch; run 3things yourself\n`);
+  console.log(`3Things — learn three things from the Codex tasks you already do.\n\nCommands:\n  3things init         Install Codex hook and configure 3Things\n  3things config       Change trigger behavior and preferences\n  3things reset        Reset config and run setup again\n  3things signoff      Remove local 3Things state\n  3things interests    Change learning interests\n  3things area         Clear today's learning area\n  3things history      Show recently learned topics\n  3things              Learn from the latest captured Codex task\n  3things on|off       Temporarily enable or disable automatic launch\n\nTrigger modes:\n  every   Launch for every Codex prompt\n  smart   Launch only when the task has useful learning value\n  manual  Never auto-launch; run 3things yourself\n`);
 }
 
 async function configureInterests(config) {
@@ -102,6 +103,12 @@ async function resetCommand() {
   config = await configureInterests(config);
   saveConfig(config);
   console.log(`\n✓ Saved. Trigger: ${config.trigger}. Terminal mode: ${config.learningTerminalMode}.`);
+}
+
+function signoffCommand() {
+  signOff();
+  console.log('Removed local 3Things state from ~/.3things.');
+  console.log('Run `3things init` when you want to start again.');
 }
 
 async function interestsCommand() {
@@ -223,7 +230,8 @@ async function learnCommand(eventFile = null, { changeArea = false } = {}) {
     }));
     console.log('');
     const rendered = renderLesson(lesson, { area, topics: selectedTopics });
-    console.log(rendered.text);
+    clearScreen();
+    await revealText(`${rendered.text}\n`);
     await focusLessonView(rendered.lessons);
 
     if (config.rememberLearnedTopics) {
@@ -277,6 +285,7 @@ export async function main(args) {
   if (command === 'init') return init();
   if (command === 'config') return configCommand();
   if (command === 'reset') return resetCommand();
+  if (command === 'signoff') return signoffCommand();
   if (command === 'interests') return interestsCommand();
   if (command === 'area') return areaCommand();
   if (command === 'history') return historyCommand();

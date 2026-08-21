@@ -8,7 +8,46 @@ export function areasPrompt(task, config) {
 
 export function topicsPrompt(task, area, historyTitles) {
   const learned = historyTitles.length ? historyTitles.join('; ') : '(none yet)';
-  return `You power 3Things, which teaches exactly three compact concepts from a developer's current coding task.\n\nCURRENT TASK:\n${task.prompt}\n\nSELECTED LEARNING AREA: ${area}\n\nRECENTLY LEARNED TOPICS (do not repeat titles or near-duplicates):\n${learned}\n\nThe developer already understands the task they asked for. Do NOT teach the implementation plan, feature requirement, UI copy, variable names, state fields, or obvious mechanics of this exact change.\n\nUse the task only as a clue for the learning context. Return exactly 3 learning options in ${area} that feel like strong video hooks: surprising, specific, curiosity-driven, and worth clicking.\n\nEach option must still point to a real transferable engineering concept. The attractive title is a promise; the later lesson must teach exactly what the title and why promise.\n\nGood option style:\n- Why terminals feel slow\n- The invisible cost of choice\n- When helpful UI becomes noise\n\nBad option style:\n- Prompt Cooldown State\n- Selection Freshness Window\n- Notice Before Reconfiguration\n- Terminal Reflow Stability\n- ANSI Contrast Semantics\n\nThe 3 options must be:\n- non-obvious to a working developer\n- transferable to future projects\n- directly useful while thinking about this task\n- different from recently learned topics\n- emotionally interesting without clickbait or hype\n\nPrefer hooks about user attention, trust, speed, failure, constraints, invisible tradeoffs, debugging instincts, accessibility, security habits, reliability, maintainability, or product judgment.\n\nEach item needs:\n- title: 4-7 words, plain language hook, no jargon unless unavoidable\n- why: <= 16 words, the concrete payoff the lesson will deliver.`;
+  return `You power 3Things, which teaches exactly three compact concepts from a developer's current coding task.
+
+CURRENT TASK:
+${task.prompt}
+
+SELECTED LEARNING AREA: ${area}
+
+RECENTLY LEARNED TOPICS (do not repeat titles or near-duplicates):
+${learned}
+
+The developer already understands the task they asked for. Do NOT teach the implementation plan, feature requirement, UI copy, variable names, state fields, or obvious mechanics of this exact change.
+
+Use the task only as a clue for the learning context. Return exactly 3 learning options in ${area} that feel like strong video hooks: surprising, specific, curiosity-driven, and worth clicking.
+
+Each option must still point to a real transferable engineering concept. The attractive title is a promise; the later lesson must teach exactly what the title and why promise.
+
+Good option style:
+- Why terminals feel slow
+- Choice creates invisible cost
+- Helpful UI can become noise
+
+Bad option style:
+- Prompt Cooldown State
+- Selection Freshness Window
+- Notice Before Reconfiguration
+- Terminal Reflow Stability
+- ANSI Contrast Semantics
+
+The 3 options must be:
+- non-obvious to a working developer
+- transferable to future projects
+- directly useful while thinking about this task
+- different from recently learned topics
+- emotionally interesting without clickbait or hype
+
+Prefer hooks about user attention, trust, speed, failure, constraints, invisible tradeoffs, debugging instincts, accessibility, security habits, reliability, maintainability, or product judgment.
+
+Each item needs:
+- title: 3-6 words, plain language hook, no jargon unless unavoidable
+- why: <= 9 words, concrete payoff only, no filler like "Learn how" or "Understand".`;
 }
 
 export function lessonPrompt(task, area, topics) {

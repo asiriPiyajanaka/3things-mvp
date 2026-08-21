@@ -18,6 +18,9 @@ test('topicsPrompt asks for transferable concepts instead of implementation step
   assert.match(prompt, /Prompt Cooldown State/);
   assert.match(prompt, /Terminal Reflow Stability/);
   assert.match(prompt, /plain language hook/);
+  assert.match(prompt, /title: 3-6 words/);
+  assert.match(prompt, /why: <= 9 words/);
+  assert.match(prompt, /no filler like "Learn how" or "Understand"/);
   assert.match(prompt, /Cognitive Load/);
 });
 
