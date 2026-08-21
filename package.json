@@ -1,0 +1,25 @@
+{
+  "name": "3things-cli",
+  "version": "0.1.0",
+  "description": "Learn three things from the Codex tasks you are already doing.",
+  "type": "module",
+  "bin": {
+    "3things": "./bin/3things.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check bin/3things.js && node --check src/cli.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "ARCHITECTURE.md",
+    "PRODUCT.md",
+    "LICENSE"
+  ]
+}

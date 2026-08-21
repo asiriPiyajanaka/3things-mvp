@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "options": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "source": { "type": "string", "enum": ["configured", "suggested"] },
+          "reason": { "type": "string" }
+        },
+        "required": ["name", "source", "reason"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["options"],
+  "additionalProperties": false
+}

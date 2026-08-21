@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "launch": { "type": "boolean" },
+    "reason": { "type": "string" }
+  },
+  "required": ["launch", "reason"],
+  "additionalProperties": false
+}
