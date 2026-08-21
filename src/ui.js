@@ -2,9 +2,13 @@ import readline from 'node:readline';
 
 const CLEAR_LINE = '\x1b[2K\r';
 const CURSOR_UP = (n) => n > 0 ? `\x1b[${n}A` : '';
+const WRAP_OFF = '\x1b[?7l';
+const WRAP_ON = '\x1b[?7h';
 const ANSI_RESET = '\x1b[0m';
 const ANSI_INVERSE = '\x1b[7m';
 const ANSI_BOLD = '\x1b[1m';
+const ANSI_DIM = '\x1b[2m';
+const ANSI_CYAN = '\x1b[36m';
 
 function colorEnabled() {
   return process.stdout.isTTY && !process.env.NO_COLOR;
@@ -15,7 +19,7 @@ function visibleWidth(text) {
 }
 
 function fitLine(text) {
-  const width = Math.max(24, (process.stdout.columns || 88) - 1);
+  const width = Math.max(24, Math.min(process.stdout.columns || 88, 110) - 2);
   if (visibleWidth(text) <= width) return text;
   const plain = String(text).replace(/\x1b\[[0-9;]*m/g, '');
   return `${plain.slice(0, Math.max(1, width - 1))}…`;
@@ -30,14 +34,59 @@ function menuLine(text, active = false) {
   return active ? activeLine(text) : fitLine(text);
 }
 
+function questionLines(question) {
+  return String(question).split('\n').map((line) => fitLine(line));
+}
+
+function writeMenu(lines) {
+  process.stdout.write(WRAP_OFF);
+  for (const line of lines) process.stdout.write(`${CLEAR_LINE}${line}\n`);
+  process.stdout.write(WRAP_ON);
+}
+
 export function heading(title) {
-  console.log(`\n┌${'─'.repeat(Math.max(18, title.length + 4))}┐`);
-  console.log(`│  ${title}${' '.repeat(Math.max(0, 16 - title.length))}  │`);
-  console.log(`└${'─'.repeat(Math.max(18, title.length + 4))}┘\n`);
+  const text = ` ${title} `;
+  const line = colorEnabled() ? `${ANSI_BOLD}${ANSI_CYAN}${text}${ANSI_RESET}` : text;
+  console.log(`\n${line}`);
+  console.log(colorEnabled() ? `${ANSI_DIM}${'─'.repeat(Math.max(18, title.length + 2))}${ANSI_RESET}\n` : `${'─'.repeat(Math.max(18, title.length + 2))}\n`);
 }
 
 export function note(text) {
-  console.log(`› ${text}`);
+  console.log(colorEnabled() ? `${ANSI_DIM}› ${text}${ANSI_RESET}` : `› ${text}`);
+}
+
+export function muted(text) {
+  console.log(colorEnabled() ? `${ANSI_DIM}${text}${ANSI_RESET}` : text);
+}
+
+export function clearScreen() {
+  if (process.stdout.isTTY) process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
+}
+
+export async function withSpinner(text, action) {
+  if (!process.stdout.isTTY) {
+    note(text);
+    return await action();
+  }
+
+  const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  let frame = 0;
+  const render = () => {
+    const symbol = frames[frame++ % frames.length];
+    const line = colorEnabled()
+      ? `${ANSI_CYAN}${symbol}${ANSI_RESET} ${ANSI_DIM}${fitLine(text)}${ANSI_RESET}`
+      : `${symbol} ${fitLine(text)}`;
+    process.stdout.write(`${CLEAR_LINE}${line}`);
+  };
+
+  render();
+  const timer = setInterval(render, 90);
+  try {
+    return await action();
+  } finally {
+    clearInterval(timer);
+    process.stdout.write(CLEAR_LINE);
+  }
 }
 
 function fallbackQuestion(question) {
@@ -79,10 +128,10 @@ export async function chooseOne(question, options) {
   const render = () => {
     if (rendered) process.stdout.write(CURSOR_UP(rendered));
     const lines = [
-      fitLine(question),
+      ...questionLines(question),
       ...options.map((o, i) => menuLine(`${i === index ? '❯' : ' '} ${o.label}`, i === index))
     ];
-    for (const line of lines) process.stdout.write(`${CLEAR_LINE}${line}\n`);
+    writeMenu(lines);
     rendered = lines.length;
   };
 
@@ -132,11 +181,11 @@ export async function chooseMany(question, options, selectedValues = []) {
   const render = () => {
     if (rendered) process.stdout.write(CURSOR_UP(rendered));
     const lines = [
-      fitLine(question),
+      ...questionLines(question),
       fitLine('(up/down move, space toggle, enter save)'),
       ...options.map((o, i) => menuLine(`${i === index ? '❯' : ' '} [${selected.has(o.value) ? 'x' : ' '}] ${o.label}`, i === index))
     ];
-    for (const line of lines) process.stdout.write(`${CLEAR_LINE}${line}\n`);
+    writeMenu(lines);
     rendered = lines.length;
   };
 

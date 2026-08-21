@@ -17,8 +17,8 @@ import {
   saveTask,
   setDailyArea
 } from './store.js';
-import { chooseMany, chooseOne, confirm, heading, inputText, note } from './ui.js';
-import { codexAvailable, runCodex, runCodexJson } from './codex.js';
+import { chooseMany, chooseOne, confirm, heading, inputText, muted, note, clearScreen, withSpinner } from './ui.js';
+import { codexAvailable, runCodex, runCodexAsync, runCodexJson, runCodexJsonAsync } from './codex.js';
 import { areasPrompt, lessonPrompt, smartPrompt, topicsPrompt } from './prompts.js';
 import { installHook, buildHookCommand } from './hook.js';
 import { openLearningTerminal } from './terminal.js';
@@ -163,16 +163,15 @@ async function chooseLearningArea(task, config, { changeArea = false } = {}) {
   const dailyArea = changeArea ? null : getFreshDailyArea(config);
   if (dailyArea) {
     note(`You are learning ${dailyArea} today.`);
-    console.log('Need to change? Run `3things area`, then run `3things` again.');
+    muted('Need to change? Run `3things area`, then run `3things` again.');
     return dailyArea;
   }
 
-  note('Finding useful learning directions…');
-  const areas = runCodexJson(areasPrompt(task, config), {
+  const areas = (await withSpinner('Finding useful learning directions', () => runCodexJsonAsync(areasPrompt(task, config), {
     cwd: task.cwd,
     model: config.model,
     schema: areasSchema
-  }).options;
+  }))).options;
 
   const area = await chooseOne('\nWhat do you want to learn today?', areas.map((item) => ({
     value: item.name,
@@ -192,23 +191,23 @@ async function learnCommand(eventFile = null, { changeArea = false } = {}) {
   }
   const config = loadConfig();
   markLearningSession({ eventFile: eventFile || null });
+  clearScreen();
   heading('3Things');
   try {
     if (config.learningTerminalMode === 'single') {
       note('Single-terminal mode is on. Complete this learning, then run `3things` here for the latest captured task.');
-      console.log('Want a new terminal every time? Run `3things config` and change terminal mode.\n');
+      muted('Want a new terminal every time? Run `3things config` and change terminal mode.');
+      console.log('');
     }
-    console.log(`From your task:\n${task.prompt.trim()}\n`);
     const area = await chooseLearningArea(task, config, { changeArea });
 
-    note(`Finding 3 things in ${area}…`);
-    const topics = runCodexJson(topicsPrompt(task, area, recentTopicTitles()), {
+    const topics = (await withSpinner(`Finding 3 things in ${area}`, () => runCodexJsonAsync(topicsPrompt(task, area, recentTopicTitles()), {
       cwd: task.cwd,
       model: config.model,
       schema: topicsSchema
-    }).topics;
+    }))).topics;
 
-    const chosen = await chooseOne('\nPick your 3Things lesson:', [
+    const chosen = await chooseOne('\nPick what you want to understand:', [
       ...topics.map((topic, index) => ({
         value: [index],
         label: `${index + 1}. ${topic.title} — ${topic.why}`
@@ -217,11 +216,12 @@ async function learnCommand(eventFile = null, { changeArea = false } = {}) {
     ]);
 
     const selectedTopics = chosen.map((i) => topics[i]);
-    console.log('\nLearning…\n');
-    const lesson = runCodex(lessonPrompt(task, area, selectedTopics), {
+    console.log('');
+    const lesson = await withSpinner('Building your lesson', () => runCodexAsync(lessonPrompt(task, area, selectedTopics), {
       cwd: task.cwd,
       model: config.model
-    });
+    }));
+    console.log('');
     const rendered = renderLesson(lesson, { area, topics: selectedTopics });
     console.log(rendered.text);
     await focusLessonView(rendered.lessons);

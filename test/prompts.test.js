@@ -11,20 +11,27 @@ test('topicsPrompt asks for transferable concepts instead of implementation step
 
   assert.match(prompt, /Do NOT teach the implementation plan/);
   assert.match(prompt, /Use the task only as a clue/);
+  assert.match(prompt, /strong video hooks/);
+  assert.match(prompt, /attractive title is a promise/);
   assert.match(prompt, /non-obvious to a working developer/);
   assert.match(prompt, /transferable to future projects/);
-  assert.match(prompt, /Reject shallow topics/);
   assert.match(prompt, /Prompt Cooldown State/);
+  assert.match(prompt, /Terminal Reflow Stability/);
+  assert.match(prompt, /plain language hook/);
   assert.match(prompt, /Cognitive Load/);
 });
 
-test('lessonPrompt teaches concepts beyond the exact requested feature', () => {
+test('lessonPrompt fulfills the selected hook promise', () => {
   const prompt = lessonPrompt(
     { prompt: 'Improve lesson topic quality.' },
     'Architecture',
-    [{ title: 'Abstraction Gradient', why: 'Helps pick the right teaching level.' }]
+    [{ title: 'Why abstractions start lying', why: 'Learn when clean layers hide the real system behavior.' }]
   );
 
+  assert.match(prompt, /promised payoff/);
+  assert.match(prompt, /fulfill the exact promise/);
+  assert.match(prompt, /Do not switch to a different technical topic/);
+  assert.match(prompt, /Start from the hook/);
   assert.match(prompt, /Teach the transferable concept/);
   assert.match(prompt, /already knows the requested feature/);
 });
