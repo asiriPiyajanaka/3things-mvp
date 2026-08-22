@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { safeSubprocessEnv } from '../src/subprocess-env.js';
 
 test('capture command saves a generic agent task', () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), '3things-capture-'));
@@ -23,7 +24,7 @@ test('capture command saves a generic agent task', () => {
     '--prompt', 'Fix retry handling'
   ], {
     cwd: process.cwd(),
-    env: { ...process.env, HOME: home },
+    env: safeSubprocessEnv(process.env, { HOME: home }),
     encoding: 'utf8'
   });
 

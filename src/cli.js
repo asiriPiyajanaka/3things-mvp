@@ -1,45 +1,28 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  appendHistory,
   clearDailyArea,
   clearLearningSession,
-  clearPendingTask,
   DEFAULT_INTERESTS,
   getFreshDailyArea,
-  hasActiveLearningSession,
   loadConfig,
   loadTask,
-  markLearningSession,
-  markPendingTask,
-  markSmartDecision,
   readLearningSession,
   readPendingTask,
   readHistory,
   readSmartDecision,
   resetConfig,
   saveConfig,
-  saveTask,
-  setDailyArea,
   signOff
 } from './store.js';
-import { chooseMany, chooseOne, confirm, heading, inputText, muted, note, clearScreen, revealText, withSpinner } from './ui.js';
-import { codexAvailable, runCodex, runCodexAsync, runCodexJson, runCodexJsonAsync } from './codex.js';
-import { areasPrompt, lessonPrompt, smartPrompt, topicsPrompt } from './prompts.js';
+import { chooseMany, chooseOne, confirm, heading, inputText, revealText } from './ui.js';
+import { codexAvailable } from './codex.js';
 import { installHook, buildHookCommand } from './hook.js';
-import { openLearningTerminal } from './terminal.js';
-import { focusLessonView, renderLesson } from './lesson-view.js';
+import { argValue, captureEventFromArgs, normalizeTaskEvent, preview, taskLabel } from './task-event.js';
+import { handleCapturedTask, learnCommand } from './learning-flow.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const smartSchema = path.join(here, 'schemas', 'smart.schema.json');
-const areasSchema = path.join(here, 'schemas', 'areas.schema.json');
-const topicsSchema = path.join(here, 'schemas', 'topics.schema.json');
 const cliPath = path.resolve(here, '../bin/3things.js');
-
-function argValue(args, name) {
-  const index = args.indexOf(name);
-  return index >= 0 ? args[index + 1] : null;
-}
 
 function printHelp() {
   console.log(`3Things — learn three things from the coding tasks you already do.\n\nCommands:\n  3things init           Install Codex hook and configure 3Things\n  3things capture        Capture a task from any coding agent\n  3things config         Change trigger behavior and preferences\n  3things reset          Reset config and run setup again\n  3things signoff        Remove local 3Things state\n  3things interests      Change learning interests\n  3things area           Clear today's learning area\n  3things history        Show recently learned topics\n  3things again          Replay the latest saved lesson\n  3things status         Show local 3Things state\n  3things clear-session  Clear active learning-session marker\n  3things                Learn from the latest captured task\n  3things on|off         Temporarily enable or disable automatic launch\n\nTrigger modes:\n  every   Launch for every captured task\n  smart   Launch only when the task has useful learning value\n  manual  Never auto-launch; run 3things yourself\n`);
@@ -141,51 +124,6 @@ async function readStdin() {
   });
 }
 
-function normalizeTaskEvent(event) {
-  return {
-    agent: event.agent || 'custom',
-    prompt: event.prompt,
-    cwd: event.cwd || process.cwd(),
-    session_id: event.session_id || event.sessionId || null,
-    turn_id: event.turn_id || event.turnId || null,
-    model: event.model || null
-  };
-}
-
-async function handleCapturedTask(event) {
-  const eventFile = saveTask(event);
-  const config = loadConfig();
-  if (!config.enabled || config.trigger === 'manual') return;
-
-  if (config.trigger === 'smart') {
-    try {
-      const decision = runCodexJson(smartPrompt(event), {
-        cwd: event.cwd || process.cwd(),
-        model: config.model,
-        schema: smartSchema
-      });
-      markSmartDecision({ eventFile, launch: decision.launch, reason: decision.reason });
-      if (!decision.launch) return;
-    } catch {
-      markSmartDecision({ eventFile, launch: false, reason: 'smart check failed' });
-      // Smart mode should fail quiet rather than disturb the coding task.
-      return;
-    }
-  }
-
-  if (config.learningTerminalMode === 'single') {
-    if (hasActiveLearningSession()) {
-      markPendingTask(eventFile);
-      return;
-    }
-    markLearningSession({ pid: null, eventFile });
-  }
-
-  if (!openLearningTerminal(eventFile) && config.learningTerminalMode === 'single') {
-    clearLearningSession();
-  }
-}
-
 async function hookCommand() {
   if (process.env.THREETHINGS_CHILD === '1') return;
 
@@ -202,37 +140,6 @@ async function hookCommand() {
   }));
 }
 
-function captureEventFromArgs(args, raw) {
-  const trimmed = raw.trim();
-  let parsed = null;
-  if (trimmed) {
-    try { parsed = JSON.parse(trimmed); } catch {}
-  }
-
-  if (parsed && typeof parsed === 'object') {
-    return normalizeTaskEvent({
-      ...parsed,
-      agent: argValue(args, '--agent') || parsed.agent || 'custom',
-      cwd: argValue(args, '--cwd') || parsed.cwd || process.cwd(),
-      sessionId: argValue(args, '--session') || parsed.sessionId || parsed.session_id || null,
-      turnId: argValue(args, '--turn') || parsed.turnId || parsed.turn_id || null,
-      model: argValue(args, '--model') || parsed.model || null
-    });
-  }
-
-  const prompt = argValue(args, '--prompt') || trimmed;
-  if (!prompt.trim()) return null;
-
-  return normalizeTaskEvent({
-    agent: argValue(args, '--agent') || 'custom',
-    prompt,
-    cwd: argValue(args, '--cwd') || process.cwd(),
-    sessionId: argValue(args, '--session') || null,
-    turnId: argValue(args, '--turn') || null,
-    model: argValue(args, '--model') || null
-  });
-}
-
 async function captureCommand(args) {
   if (process.env.THREETHINGS_CHILD === '1') return;
 
@@ -245,145 +152,6 @@ async function captureCommand(args) {
   }
 
   await handleCapturedTask(event);
-}
-
-function recentTopicTitles() {
-  return readHistory(80).map((x) => x.topic).filter(Boolean);
-}
-
-function preview(text, length = 82) {
-  const clean = String(text || '').replace(/\s+/g, ' ').trim();
-  if (clean.length <= length) return clean;
-  return `${clean.slice(0, Math.max(1, length - 1))}…`;
-}
-
-async function chooseLearningArea(task, config, { changeArea = false } = {}) {
-  const dailyArea = changeArea ? null : getFreshDailyArea(config);
-  if (dailyArea) {
-    note(`Area: ${dailyArea}`);
-    muted("Reused from today's choice. Run `3things area` to change it.");
-    return dailyArea;
-  }
-
-  const areas = (await withSpinner('Finding useful learning directions', () => runCodexJsonAsync(areasPrompt(task, config), {
-    cwd: task.cwd,
-    model: config.model,
-    schema: areasSchema
-  }))).options;
-
-  const area = await chooseOne('\nWhat do you want to learn today?', areas.map((item) => ({
-    value: item.name,
-    label: `${item.source === 'suggested' ? '★ ' : ''}${item.name} — ${item.reason}`
-  })));
-
-  setDailyArea(config, area);
-  saveConfig(config);
-  return area;
-}
-
-async function runLesson(eventFile, config, { changeArea = false } = {}) {
-  const task = loadTask(eventFile || undefined);
-  if (!task) {
-    console.log('No task captured yet. Capture a task first, or use `3things init` for Codex integration.');
-    return false;
-  }
-
-  const area = await chooseLearningArea(task, config, { changeArea });
-  muted(`Task: ${preview(task.prompt)}`);
-
-  const topics = (await withSpinner(`Finding 3 things in ${area}`, () => runCodexJsonAsync(topicsPrompt(task, area, recentTopicTitles()), {
-    cwd: task.cwd,
-    model: config.model,
-    schema: topicsSchema
-  }))).topics;
-
-  const chosen = await chooseOne('\nPick what you want to understand:', [
-    ...topics.map((topic, index) => ({
-      value: [index],
-      label: `${index + 1}. ${topic.title}\n   ${topic.why}`
-    })),
-    { value: [0, 1, 2], label: 'All 3' }
-  ]);
-
-  const selectedTopics = chosen.map((i) => topics[i]);
-  console.log('');
-  const lesson = await withSpinner('Building your lesson', () => runCodexAsync(lessonPrompt(task, area, selectedTopics), {
-    cwd: task.cwd,
-    model: config.model
-  }));
-  console.log('');
-  const rendered = renderLesson(lesson, { area, topics: selectedTopics });
-  clearScreen();
-  await revealText(`${rendered.text}\n`);
-  await focusLessonView(rendered.lessons);
-
-  if (config.rememberLearnedTopics) {
-    for (const topic of selectedTopics) {
-      appendHistory({
-        learnedAt: new Date().toISOString(),
-        area,
-        topic: topic.title,
-        task: task.prompt.slice(0, 500),
-        cwd: task.cwd,
-        lesson: rendered.text
-      });
-    }
-  }
-
-  console.log('\n✓ Saved to 3Things history.');
-  return true;
-}
-
-async function choosePendingTask(currentEventFile) {
-  const pending = readPendingTask({ currentEventFile });
-  if (!pending) return { action: 'none' };
-  const task = loadTask(pending.eventFile);
-  const label = task?.prompt ? `Start this lesson\n   ${taskLabel(task, 64)}` : 'Start this lesson';
-
-  const choice = await chooseOne('\nNew task is ready:', [
-    { value: 'start', label },
-    { value: 'not-now', label: 'Skip it' }
-  ]);
-
-  clearPendingTask();
-  if (choice !== 'start') return { action: 'skip' };
-  return { action: 'start', eventFile: pending.eventFile };
-}
-
-async function learnCommand(eventFile = null, { changeArea = false } = {}) {
-  const config = loadConfig();
-  let currentEventFile = eventFile;
-  markLearningSession({ eventFile: currentEventFile || null });
-  clearScreen();
-  heading('3Things');
-  try {
-    if (config.learningTerminalMode === 'single') {
-      note('Single-terminal mode is on. New eligible tasks will wait here until you finish.');
-      muted('Want a new terminal every time? Run `3things config` and change terminal mode.');
-      console.log('');
-    }
-
-    while (true) {
-      markLearningSession({ eventFile: currentEventFile || null });
-      const completed = await runLesson(currentEventFile, config, { changeArea });
-      if (!completed) return;
-
-      const pendingChoice = config.learningTerminalMode === 'single'
-        ? await choosePendingTask(currentEventFile)
-        : null;
-      if (pendingChoice?.action === 'none') {
-        muted('No pending lessons.');
-      }
-      if (pendingChoice?.action !== 'start') return;
-
-      currentEventFile = pendingChoice.eventFile;
-      changeArea = false;
-      clearScreen();
-      heading('3Things');
-    }
-  } finally {
-    clearLearningSession();
-  }
 }
 
 function historyCommand() {
@@ -432,11 +200,6 @@ function formatStatus(value) {
   return value ? 'yes' : 'no';
 }
 
-function taskLabel(task, length = 62) {
-  const agent = task.agent || 'unknown';
-  return `[${agent}] ${preview(task.prompt, length)}`;
-}
-
 function statusCommand() {
   const config = loadConfig();
   const latestTask = loadTask();
@@ -453,7 +216,7 @@ function statusCommand() {
   console.log(`daily area: ${area || 'none'}`);
   console.log(`active session: ${formatStatus(session?.active)}${session?.pid ? ` (pid ${session.pid})` : ''}`);
   console.log(`pending task: ${pendingTask ? taskLabel(pendingTask) : 'none'}`);
-  console.log(`latest task: ${latestTask ? `${String(latestTask.capturedAt || '').replace('T', ' ').slice(0, 16)} — ${taskLabel(latestTask)}` : 'none'}`);
+  console.log(`latest task: ${latestTask ? `${String(latestTask.capturedAt || '').replaceAll('T', ' ').slice(0, 16)} — ${taskLabel(latestTask)}` : 'none'}`);
   console.log(`last smart decision: ${decision ? `${decision.launch ? 'launch' : 'skip'}${decision.reason ? ` — ${decision.reason}` : ''}` : 'none'}`);
 }
 

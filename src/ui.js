@@ -15,13 +15,13 @@ function colorEnabled() {
 }
 
 function visibleWidth(text) {
-  return String(text).replace(/\x1b\[[0-9;]*m/g, '').length;
+  return String(text).replaceAll(/\x1b\[[0-9;]*m/g, '').length;
 }
 
 function fitLine(text) {
   const width = Math.max(24, Math.min(process.stdout.columns || 88, 110) - 2);
   if (visibleWidth(text) <= width) return text;
-  const plain = String(text).replace(/\x1b\[[0-9;]*m/g, '');
+  const plain = String(text).replaceAll(/\x1b\[[0-9;]*m/g, '');
   return `${plain.slice(0, Math.max(1, width - 1))}…`;
 }
 

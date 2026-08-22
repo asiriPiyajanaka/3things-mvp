@@ -2,13 +2,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
+import { codexChildEnv } from './subprocess-env.js';
 
 function tempFile(name) {
   return path.join(os.tmpdir(), `3things-${process.pid}-${Date.now()}-${name}`);
 }
 
 export function codexAvailable() {
-  const result = spawnSync('codex', ['--version'], { encoding: 'utf8' });
+  const result = spawnSync('codex', ['--version'], { encoding: 'utf8', env: codexChildEnv() });
   return result.status === 0;
 }
 
@@ -19,7 +20,7 @@ export function runCodex(prompt, { cwd = process.cwd(), model = null, schema = n
   const result = spawnSync('codex', args, {
     input: prompt,
     encoding: 'utf8',
-    env: { ...process.env, THREETHINGS_CHILD: '1' },
+    env: codexChildEnv(),
     maxBuffer: 10 * 1024 * 1024
   });
 
@@ -64,7 +65,7 @@ export function runCodexAsync(prompt, { cwd = process.cwd(), model = null, schem
   return new Promise((resolve, reject) => {
     const child = spawn('codex', args, {
       stdio: ['pipe', 'pipe', 'pipe'],
-      env: { ...process.env, THREETHINGS_CHILD: '1' }
+      env: codexChildEnv()
     });
     let stdout = '';
     let stderr = '';

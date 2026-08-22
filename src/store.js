@@ -199,7 +199,7 @@ export function readSmartDecision() {
 
 export function saveTask(event) {
   ensureHome();
-  const safeId = String(event.turn_id || Date.now()).replace(/[^a-zA-Z0-9._-]/g, '_');
+  const safeId = String(event.turn_id || Date.now()).replaceAll(/[^a-zA-Z0-9._-]/g, '_');
   const file = path.join(tasksDir, `${safeId}.json`);
   const task = {
     agent: event.agent || 'unknown',

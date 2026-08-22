@@ -3,7 +3,7 @@ import path from 'node:path';
 import { codexHooksPath } from './paths.js';
 
 export function buildHookCommand(nodePath, cliPath) {
-  const quote = (v) => `"${String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+  const quote = (v) => `"${String(v).replaceAll(/\\/g, '\\\\').replaceAll(/"/g, '\\"')}"`;
   return `${quote(nodePath)} ${quote(cliPath)} hook`;
 }
 
