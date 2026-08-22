@@ -10,7 +10,7 @@
         "type": "object",
         "properties": {
           "title": { "type": "string", "minLength": 8, "maxLength": 42 },
-          "why": { "type": "string", "minLength": 12, "maxLength": 60 }
+          "why": { "type": "string", "minLength": 28, "maxLength": 100 }
         },
         "required": ["title", "why"],
         "additionalProperties": false

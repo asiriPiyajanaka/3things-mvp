@@ -123,14 +123,6 @@ function sectionLines(name, text, width, color) {
   ];
 }
 
-function lessonSummary(lesson, width, color) {
-  const firstSection = lesson.sections[0];
-  if (!firstSection?.text) return '';
-  const firstSentence = firstSection.text.match(/^[^.?!]+[.?!]/)?.[0] || firstSection.text;
-  if (firstSentence.trim() === firstSection.text.trim()) return '';
-  return wrapBlock(firstSentence, { width, indent: 0, hanging: 2 });
-}
-
 export function renderLesson(markdown, { area = null, topics = [], color = colorEnabled(), width = terminalWidth() } = {}) {
   const lessons = parseLesson(markdown);
   const lines = [];
@@ -155,11 +147,6 @@ export function renderLesson(markdown, { area = null, topics = [], color = color
 
     const label = lessons.length > 1 ? `${index + 1}. ${lesson.title}` : lesson.title;
     lines.push(style(label, ['bold', 'white'], color));
-    const summary = lessonSummary(lesson, width, color);
-    if (summary) {
-      lines.push(style(summary, 'dim', color));
-      lines.push('');
-    }
 
     for (const section of lesson.sections) {
       lines.push(...sectionLines(section.name, section.text, width, color));
