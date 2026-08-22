@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { pendingTaskPath, smartDecisionPath } from '../src/paths.js';
+import { latestTaskPath, pendingTaskPath, smartDecisionPath } from '../src/paths.js';
 import {
   clearDailyArea,
   clearPendingTask,
@@ -9,8 +9,10 @@ import {
   getFreshDailyArea,
   markPendingTask,
   markSmartDecision,
+  loadTask,
   readPendingTask,
   readSmartDecision,
+  saveTask,
   setDailyArea
 } from '../src/store.js';
 
@@ -70,4 +72,24 @@ test('smart decision stores the latest launch reason', () => {
   assert.equal(fs.existsSync(smartDecisionPath), true);
 
   fs.rmSync(smartDecisionPath, { force: true });
+});
+
+test('saveTask records the source agent', () => {
+  const previousLatest = fs.existsSync(latestTaskPath)
+    ? fs.readFileSync(latestTaskPath, 'utf8')
+    : null;
+  const file = saveTask({
+    agent: 'custom-agent',
+    prompt: 'Fix retry handling',
+    cwd: process.cwd(),
+    turn_id: 'store-test-agent'
+  });
+
+  const task = loadTask(file);
+  assert.equal(task.agent, 'custom-agent');
+  assert.equal(task.prompt, 'Fix retry handling');
+
+  fs.rmSync(file, { force: true });
+  if (previousLatest === null) fs.rmSync(latestTaskPath, { force: true });
+  else fs.writeFileSync(latestTaskPath, previousLatest);
 });

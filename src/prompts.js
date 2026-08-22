@@ -89,13 +89,28 @@ Create a compact but complete lesson for the selected option(s). The lesson must
 
 The task is only a bridge back to the user's context. The lesson should teach the deeper engineering concept, not summarize the requested change.
 
-For EACH option use exactly these sections:
+For EACH option use this structure:
 # <same title>
-**Mental model** — 2-4 plain sentences that explain the practical idea.
-**How it works** — concrete mechanisms, facts, named tradeoffs, and one real example.
-**In this task** — one sentence back to the current task.
-**Common mistake** — one high-value failure mode and why smart engineers make it.
-**Remember** — one sharp sentence.
+## <short section title>
+...
+
+Choose 3 to 5 short section titles that fit the topic. Use the clearest lesson shape for the concept, such as:
+- Debugging flow
+- Before / after
+- Failure story
+- Checklist
+- Mental model
+- Tradeoff map
+- Tiny example
+- Common traps
+
+Each lesson must include these ingredients, but the section names and order should fit the topic:
+- the core idea
+- concrete mechanism or fact
+- one real engineering example
+- one sentence connecting back to the current task
+- one mistake to avoid
+- one practical takeaway
 
 Quality bar:
 - Include at least 2 concrete facts, mechanisms, or named tradeoffs per topic.
@@ -109,7 +124,7 @@ Quality bar:
 Rules:
 - Start from the hook the user selected and pay it off directly.
 - Teach the transferable concept, not the steps for this exact change.
-- Keep "In this task" to one sentence; do not let it dominate the lesson.
+- Connect back to the current task once, in one sentence.
 - Do not open with poetic contrast, aphorisms, or abstract definitions.
 - Use real examples an engineer recognizes: hooks, processes, stdout, cache keys, state files, retries, queues, timeouts, locks, terminals, APIs, databases, or tests.
 - Use a small code snippet only when it materially clarifies the concept.
@@ -120,5 +135,5 @@ Rules:
 - Avoid wide diagrams and Markdown tables.
 - Use plain file paths and command names without backticks unless a code snippet is necessary.
 - Do not modify files.
-- Output only the option headings and the five requested sections.`;
+- Output only topic headings and their 3 to 5 section headings.`;
 }

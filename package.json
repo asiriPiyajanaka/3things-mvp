@@ -1,7 +1,7 @@
 {
   "name": "3things-cli",
   "version": "0.1.0",
-  "description": "Learn three things from the Codex tasks you are already doing.",
+  "description": "Learn three things from the coding tasks you are already doing.",
   "type": "module",
   "bin": {
     "3things": "./bin/3things.js"

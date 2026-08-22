@@ -45,6 +45,13 @@ test('lessonPrompt fulfills the selected hook promise', () => {
   assert.match(prompt, /promised payoff/);
   assert.match(prompt, /fulfill the exact promise/);
   assert.match(prompt, /Do not switch to a different technical topic/);
+  assert.match(prompt, /For EACH option use this structure/);
+  assert.match(prompt, /## <short section title>/);
+  assert.match(prompt, /Choose 3 to 5 short section titles/);
+  assert.match(prompt, /Debugging flow/);
+  assert.match(prompt, /Before \/ after/);
+  assert.match(prompt, /section names and order should fit the topic/);
+  assert.match(prompt, /core idea/);
   assert.match(prompt, /Start from the hook/);
   assert.match(prompt, /experienced engineers/);
   assert.match(prompt, /simple, direct, real-world language/);
@@ -59,7 +66,7 @@ test('lessonPrompt fulfills the selected hook promise', () => {
   assert.match(prompt, /what happens, why it happens, what to check/);
   assert.match(prompt, /Do not open with poetic contrast/);
   assert.match(prompt, /hooks, processes, stdout/);
-  assert.match(prompt, /why smart engineers make it/);
-  assert.match(prompt, /Keep "In this task" to one sentence/);
+  assert.match(prompt, /one mistake to avoid/);
+  assert.match(prompt, /Connect back to the current task once, in one sentence/);
   assert.match(prompt, /already knows the requested feature/);
 });

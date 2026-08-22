@@ -3,18 +3,15 @@
 ## Runtime flow
 
 ```text
-Developer
+Coding agent
    │
-   │ submits prompt
+   │ captures task
    ▼
-Codex CLI
+agent adapter
    │
-   ├──────────────────────────────► normal Codex work continues
+   ├─ Codex UserPromptSubmit ─────► `3things hook`
    │
-   └─ UserPromptSubmit hook (async)
-              │
-              ▼
-        `3things hook`
+   └─ generic integration ────────► `3things capture`
               │
               ├─ save latest task locally
               │
@@ -54,6 +51,15 @@ Codex CLI
                                       ▼
                                 local history
 ```
+
+## Capture adapters
+
+3Things keeps task capture separate from lesson generation.
+
+- `3things hook` is the Codex adapter. It reads the `UserPromptSubmit` JSON payload and normalizes it into a task.
+- `3things capture` is the generic adapter. It accepts plain text, CLI flags, or JSON from any coding agent or script.
+
+Once a task is captured, trigger policy, terminal behavior, pending lessons, history, and lesson generation are shared.
 
 ## Why a Codex hook instead of a wrapper
 
@@ -106,6 +112,20 @@ The learning model may inspect the repository for context but should not write t
   "suggestOutsideInterests": true,
   "rememberLearnedTopics": true,
   "model": null
+}
+```
+
+### latest-task.json / tasks/*.json
+
+```json
+{
+  "agent": "codex",
+  "prompt": "...",
+  "cwd": "...",
+  "sessionId": "...",
+  "turnId": "...",
+  "model": "...",
+  "capturedAt": "..."
 }
 ```
 

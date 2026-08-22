@@ -1,8 +1,8 @@
 # 3Things
 
-**Learn three things from the code you're already writing.**
+**Learn three things from the coding work you're already doing.**
 
-3Things is a tiny companion CLI for Codex. You keep using `codex` normally. When you submit a coding task, a Codex `UserPromptSubmit` hook captures the task and—depending on your trigger setting—opens a separate terminal with a short learning side flow.
+3Things is a tiny companion CLI for coding agents. It captures real development tasks and, depending on your trigger setting, opens a separate terminal with a short learning side flow. Codex is the built-in integration today; other agents can call `3things capture`.
 
 ## What it feels like
 
@@ -30,17 +30,17 @@ Pick your 3Things lesson:
 
 ## MVP features
 
-- Uses Codex's `UserPromptSubmit` hook; no Codex wrapper command.
-- Hook runs asynchronously so the main Codex turn is not intentionally blocked.
+- Captures tasks through Codex's `UserPromptSubmit` hook or the generic `3things capture` command.
+- Codex hook runs asynchronously so the main Codex turn is not intentionally blocked.
 - Three trigger modes:
   - `smart` — only launch when the task has useful learning value.
-  - `every` — launch for every Codex prompt.
+  - `every` — launch for every captured task.
   - `manual` — never auto-launch; run `3things` yourself.
 - User-configurable learning interests.
 - Can suggest relevant learning areas outside the configured list.
 - Always generates exactly three concepts.
 - Pick one concept or all three.
-- Compact lesson format: mental model, mechanics, task connection, common mistake, memory line.
+- Compact lessons with dynamic sections chosen for the topic.
 - Local history avoids repeatedly teaching the same concept.
 - Child Codex calls use `THREETHINGS_CHILD=1` to prevent recursive hook launches.
 - Child Codex calls use `codex exec --ephemeral --sandbox read-only`.
@@ -49,8 +49,8 @@ Pick your 3Things lesson:
 ## Requirements
 
 - Node.js 20+
-- Codex CLI installed and authenticated
-- Codex hooks enabled
+- Codex CLI installed and authenticated for lesson generation
+- Codex hooks enabled only if you want automatic Codex capture
 
 ## Try it from this folder
 
@@ -67,10 +67,23 @@ codex
 
 Submit a task. With `smart` or `every` mode, 3Things can open a second terminal automatically.
 
+Other coding agents can capture tasks through stdin:
+
+```bash
+printf '%s' "Fix stale auth token refresh" | 3things capture --agent claude-code --cwd "$PWD"
+```
+
+Or with JSON:
+
+```bash
+printf '%s' '{"agent":"custom","prompt":"Fix stale auth token refresh","cwd":"/path/to/repo"}' | 3things capture
+```
+
 ## Commands
 
 ```bash
 3things init
+3things capture
 3things config
 3things reset
 3things signoff
@@ -85,7 +98,9 @@ Submit a task. With `smart` or `every` mode, 3Things can open a second terminal 
 3things off
 ```
 
-`3things` with no subcommand uses the latest captured Codex task.
+`3things` with no subcommand uses the latest captured task.
+
+`3things capture` accepts a task from any coding agent. Pipe plain text or JSON, or pass `--prompt`, `--agent`, and `--cwd`.
 
 `3things reset` resets local configuration to defaults and immediately reruns the setup questions.
 
@@ -107,7 +122,7 @@ After you choose a learning area, 3Things reuses it for 24 hours so new lesson t
 Terminal mode is configurable:
 
 - `new` opens a new learning terminal for each launched lesson.
-- `single` keeps one learning terminal active at a time. While a lesson is active, new eligible Codex prompts are saved as pending. After you choose `Done`, 3Things asks whether to start the pending lesson in the same terminal.
+- `single` keeps one learning terminal active at a time. While a lesson is active, new eligible captured tasks are saved as pending. After you choose `Done`, 3Things asks whether to start the pending lesson in the same terminal.
 
 ## Local data
 
@@ -124,9 +139,32 @@ Terminal mode is configurable:
   tasks/
 ```
 
-The captured Codex prompt is stored locally because manual mode and the newly opened terminal need a reliable handoff. Do not use 3Things on prompts containing secrets you would not want persisted locally.
+The captured task prompt is stored locally because manual mode and the newly opened terminal need a reliable handoff. Do not use 3Things on prompts containing secrets you would not want persisted locally.
 
-## Codex hook installed by `3things init`
+## Integrations
+
+### Generic capture
+
+Any coding agent or script can call:
+
+```bash
+3things capture --agent custom --cwd "$PWD" --prompt "Fix flaky payment webhook tests"
+```
+
+For JSON input, 3Things reads:
+
+```json
+{
+  "agent": "custom",
+  "prompt": "Fix flaky payment webhook tests",
+  "cwd": "/path/to/repo",
+  "sessionId": "optional",
+  "turnId": "optional",
+  "model": "optional"
+}
+```
+
+### Codex hook installed by `3things init`
 
 3Things merges a `UserPromptSubmit` entry into `~/.codex/hooks.json` and preserves existing JSON hook configuration. The installed command points directly to the Node executable and the installed 3Things CLI file so it does not depend on shell PATH lookup.
 

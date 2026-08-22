@@ -13,7 +13,8 @@ const SECTION_META = {
   'How it works': { label: 'How It Works', color: 'blue', icon: '▣' },
   'In this task': { label: 'In This Task', color: 'magenta', icon: '◆' },
   'Common mistake': { label: 'Common Mistake', color: 'red', icon: '!' },
-  Remember: { label: 'Remember', color: 'green', icon: '✓' }
+  Remember: { label: 'Remember', color: 'green', icon: '✓' },
+  default: { color: 'cyan', icon: '◉' }
 };
 
 const ANSI = {
@@ -57,6 +58,21 @@ function sectionName(raw) {
   return SECTION_ORDER.find((section) => section.toLowerCase() === normalized) || null;
 }
 
+function sectionKey(name) {
+  return name.trim().toLowerCase();
+}
+
+function displaySectionName(raw) {
+  const stripped = stripMarkdown(raw).replace(/^#+\s*/, '').trim();
+  const canonical = sectionName(stripped);
+  if (canonical) return canonical;
+  return stripped
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map((word) => word ? `${word[0].toUpperCase()}${word.slice(1)}` : '')
+    .join(' ');
+}
+
 function parseSectionLine(line) {
   const bold = line.match(/^\*\*([^*]+)\*\*\s*(?:[-—:]\s*)?(.*)$/);
   if (bold) {
@@ -81,9 +97,20 @@ export function parseLesson(markdown) {
 
   const ensureLesson = () => {
     if (!current) {
-      current = { title: 'Lesson', sections: Object.fromEntries(SECTION_ORDER.map((name) => [name, []])) };
+      current = { title: 'Lesson', sections: [] };
       lessons.push(current);
     }
+  };
+
+  const ensureSection = (name) => {
+    ensureLesson();
+    const normalized = sectionKey(name);
+    let existing = current.sections.find((item) => sectionKey(item.name) === normalized);
+    if (!existing) {
+      existing = { name, lines: [] };
+      current.sections.push(existing);
+    }
+    section = existing;
   };
 
   for (const rawLine of String(markdown || '').split('\n')) {
@@ -97,34 +124,38 @@ export function parseLesson(markdown) {
     if (!inFence) {
       const topic = line.match(/^#\s+(.+)$/);
       if (topic) {
-        current = { title: stripMarkdown(topic[1]).trim(), sections: Object.fromEntries(SECTION_ORDER.map((name) => [name, []])) };
+        current = { title: stripMarkdown(topic[1]).trim(), sections: [] };
         lessons.push(current);
         section = null;
         continue;
       }
 
+      const dynamicSection = line.match(/^##\s+(.+)$/);
+      if (dynamicSection) {
+        ensureSection(displaySectionName(dynamicSection[1]));
+        continue;
+      }
+
       const parsed = parseSectionLine(line.trim());
       if (parsed) {
-        ensureLesson();
-        section = parsed.name;
-        if (parsed.rest) current.sections[section].push(stripMarkdown(parsed.rest));
+        ensureSection(parsed.name);
+        if (parsed.rest) section.lines.push(stripMarkdown(parsed.rest));
         continue;
       }
     }
 
     ensureLesson();
-    if (section) current.sections[section].push(stripMarkdown(line));
+    if (section) section.lines.push(stripMarkdown(line));
   }
 
   return lessons
     .map((lesson) => ({
       ...lesson,
-      sections: Object.fromEntries(SECTION_ORDER.map((name) => [
-        name,
-        lesson.sections[name].join('\n').trim()
-      ]))
+      sections: lesson.sections
+        .map((item) => ({ name: item.name, text: item.lines.join('\n').trim() }))
+        .filter((item) => item.text)
     }))
-    .filter((lesson) => SECTION_ORDER.some((name) => lesson.sections[name]));
+    .filter((lesson) => lesson.sections.length);
 }
 
 function wrapWords(text, width) {
@@ -202,19 +233,20 @@ function panel(title, rows, width, color) {
 
 function sectionLines(name, text, width, color) {
   if (!text) return [];
-  const meta = SECTION_META[name];
+  const meta = SECTION_META[name] || SECTION_META.default;
+  const label = SECTION_META[name]?.label || name;
   return [
-    `${style(meta.icon, meta.color, color)} ${style(meta.label, ['bold', meta.color], color)}`,
+    `${style(meta.icon, meta.color, color)} ${style(label, ['bold', meta.color], color)}`,
     wrapBlock(text, { width }),
     ''
   ];
 }
 
 function lessonSummary(lesson, width, color) {
-  const mentalModel = lesson.sections['Mental model'];
-  if (!mentalModel) return '';
-  const firstSentence = mentalModel.match(/^[^.?!]+[.?!]/)?.[0] || mentalModel;
-  if (firstSentence.trim() === mentalModel.trim()) return '';
+  const firstSection = lesson.sections[0];
+  if (!firstSection?.text) return '';
+  const firstSentence = firstSection.text.match(/^[^.?!]+[.?!]/)?.[0] || firstSection.text;
+  if (firstSentence.trim() === firstSection.text.trim()) return '';
   return wrapBlock(firstSentence, { width, indent: 0, hanging: 2 });
 }
 
@@ -248,8 +280,8 @@ export function renderLesson(markdown, { area = null, topics = [], color = color
       lines.push('');
     }
 
-    for (const name of SECTION_ORDER) {
-      lines.push(...sectionLines(name, lesson.sections[name], width, color));
+    for (const section of lesson.sections) {
+      lines.push(...sectionLines(section.name, section.text, width, color));
     }
   });
 
@@ -261,19 +293,18 @@ export async function focusLessonView(lessons) {
 
   while (true) {
     const choice = await chooseOne('\nFocus a section:', [
-      ...lessons.flatMap((lesson, lessonIndex) => SECTION_ORDER
-        .filter((name) => lesson.sections[name])
-        .map((name) => ({
-          value: { lessonIndex, name },
-          label: `${lessons.length > 1 ? `${lessonIndex + 1}. ${lesson.title} — ` : ''}${SECTION_META[name].label}`
+      ...lessons.flatMap((lesson, lessonIndex) => lesson.sections
+        .map((section, sectionIndex) => ({
+          value: { lessonIndex, sectionIndex },
+          label: `${lessons.length > 1 ? `${lessonIndex + 1}. ${lesson.title} — ` : ''}${SECTION_META[section.name]?.label || section.name}`
         }))),
       { value: null, label: 'Done' }
     ]);
 
     if (!choice) return;
     const lesson = lessons[choice.lessonIndex];
-    const name = choice.name;
-    heading(`${lesson.title}: ${SECTION_META[name].label}`);
-    console.log(wrapBlock(lesson.sections[name], { width: terminalWidth(), indent: 0, hanging: 2 }));
+    const section = lesson.sections[choice.sectionIndex];
+    heading(`${lesson.title}: ${SECTION_META[section.name]?.label || section.name}`);
+    console.log(wrapBlock(section.text, { width: terminalWidth(), indent: 0, hanging: 2 }));
   }
 }

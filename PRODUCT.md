@@ -2,7 +2,7 @@
 
 ## One-line product
 
-3Things turns everyday AI-assisted coding into continuous micro-learning by teaching exactly three relevant engineering concepts from the task a developer just gave Codex.
+3Things turns everyday AI-assisted coding into continuous micro-learning by teaching exactly three relevant engineering concepts from the coding task a developer is already doing.
 
 ## Core rule
 
@@ -12,13 +12,13 @@ The user may learn one or all three, but discovery always returns exactly three 
 
 ## Primary workflow
 
-1. Developer submits a normal Codex prompt.
-2. 3Things receives it through `UserPromptSubmit`.
+1. Developer submits a normal task to a coding agent.
+2. 3Things captures it through an integration such as the Codex `UserPromptSubmit` hook or `3things capture`.
 3. Trigger policy decides whether to open:
    - `every`
    - `smart`
    - `manual`
-4. A separate terminal opens without interrupting the main Codex workflow.
+4. A separate terminal opens without interrupting the main coding workflow.
 5. 3Things proposes relevant learning areas, preferring configured interests and optionally suggesting outside areas.
 6. User selects an area.
 7. 3Things generates exactly three concepts tied to the real task.
@@ -47,7 +47,7 @@ Uses a compact Codex classification call. Skip only genuinely trivial tasks. If 
 
 ### every
 
-Launch on every submitted Codex prompt. This is intentionally available for users who want aggressive learning, even from small changes.
+Launch on every captured task. This is intentionally available for users who want aggressive learning, even from small changes.
 
 ### manual
 
@@ -74,12 +74,13 @@ For a certificate-pinning task, 3Things may offer:
 
 ## Lesson contract
 
-Each selected concept contains:
+Each selected concept uses 3 to 5 compact sections chosen for the topic. The lesson should still contain:
 
-- Mental model
-- How it works
-- In this task
-- Common mistake
-- Remember
+- the core idea
+- concrete mechanism or fact
+- a real engineering example
+- one sentence connecting back to the current task
+- one mistake to avoid
+- one practical takeaway
 
 The lesson should be compact enough to read during a real development session.

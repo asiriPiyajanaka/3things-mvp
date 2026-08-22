@@ -42,7 +42,7 @@ function argValue(args, name) {
 }
 
 function printHelp() {
-  console.log(`3Things — learn three things from the Codex tasks you already do.\n\nCommands:\n  3things init           Install Codex hook and configure 3Things\n  3things config         Change trigger behavior and preferences\n  3things reset          Reset config and run setup again\n  3things signoff        Remove local 3Things state\n  3things interests      Change learning interests\n  3things area           Clear today's learning area\n  3things history        Show recently learned topics\n  3things again          Replay the latest saved lesson\n  3things status         Show local 3Things state\n  3things clear-session  Clear active learning-session marker\n  3things                Learn from the latest captured Codex task\n  3things on|off         Temporarily enable or disable automatic launch\n\nTrigger modes:\n  every   Launch for every Codex prompt\n  smart   Launch only when the task has useful learning value\n  manual  Never auto-launch; run 3things yourself\n`);
+  console.log(`3Things — learn three things from the coding tasks you already do.\n\nCommands:\n  3things init           Install Codex hook and configure 3Things\n  3things capture        Capture a task from any coding agent\n  3things config         Change trigger behavior and preferences\n  3things reset          Reset config and run setup again\n  3things signoff        Remove local 3Things state\n  3things interests      Change learning interests\n  3things area           Clear today's learning area\n  3things history        Show recently learned topics\n  3things again          Replay the latest saved lesson\n  3things status         Show local 3Things state\n  3things clear-session  Clear active learning-session marker\n  3things                Learn from the latest captured task\n  3things on|off         Temporarily enable or disable automatic launch\n\nTrigger modes:\n  every   Launch for every captured task\n  smart   Launch only when the task has useful learning value\n  manual  Never auto-launch; run 3things yourself\n`);
 }
 
 async function configureInterests(config) {
@@ -78,7 +78,7 @@ function printReady(config) {
   console.log(`Mode: ${config.trigger}`);
   console.log(`Terminal: ${config.learningTerminalMode}`);
   console.log(`Interests: ${config.interests.join(', ') || 'none'}`);
-  console.log('\nUse Codex normally. When a task has learning value, 3Things opens a short lesson.');
+  console.log('\nUse your coding agent normally. When a captured task has learning value, 3Things opens a short lesson.');
 }
 
 async function init() {
@@ -132,23 +132,29 @@ async function interestsCommand() {
   console.log(`\n✓ Saved: ${config.interests.join(', ') || 'none'}`);
 }
 
-async function hookCommand() {
-  if (process.env.THREETHINGS_CHILD === '1') return;
-
-  const raw = await new Promise((resolve) => {
+async function readStdin() {
+  return await new Promise((resolve) => {
     let data = '';
     process.stdin.setEncoding('utf8');
     process.stdin.on('data', (chunk) => { data += chunk; });
     process.stdin.on('end', () => resolve(data));
   });
-  if (!raw.trim()) return;
+}
 
-  let event;
-  try { event = JSON.parse(raw); } catch { return; }
-  if (event.hook_event_name !== 'UserPromptSubmit' || !event.prompt?.trim()) return;
+function normalizeTaskEvent(event) {
+  return {
+    agent: event.agent || 'custom',
+    prompt: event.prompt,
+    cwd: event.cwd || process.cwd(),
+    session_id: event.session_id || event.sessionId || null,
+    turn_id: event.turn_id || event.turnId || null,
+    model: event.model || null
+  };
+}
 
-  const config = loadConfig();
+async function handleCapturedTask(event) {
   const eventFile = saveTask(event);
+  const config = loadConfig();
   if (!config.enabled || config.trigger === 'manual') return;
 
   if (config.trigger === 'smart') {
@@ -178,6 +184,67 @@ async function hookCommand() {
   if (!openLearningTerminal(eventFile) && config.learningTerminalMode === 'single') {
     clearLearningSession();
   }
+}
+
+async function hookCommand() {
+  if (process.env.THREETHINGS_CHILD === '1') return;
+
+  const raw = await readStdin();
+  if (!raw.trim()) return;
+
+  let event;
+  try { event = JSON.parse(raw); } catch { return; }
+  if (event.hook_event_name !== 'UserPromptSubmit' || !event.prompt?.trim()) return;
+
+  await handleCapturedTask(normalizeTaskEvent({
+    ...event,
+    agent: 'codex'
+  }));
+}
+
+function captureEventFromArgs(args, raw) {
+  const trimmed = raw.trim();
+  let parsed = null;
+  if (trimmed) {
+    try { parsed = JSON.parse(trimmed); } catch {}
+  }
+
+  if (parsed && typeof parsed === 'object') {
+    return normalizeTaskEvent({
+      ...parsed,
+      agent: argValue(args, '--agent') || parsed.agent || 'custom',
+      cwd: argValue(args, '--cwd') || parsed.cwd || process.cwd(),
+      sessionId: argValue(args, '--session') || parsed.sessionId || parsed.session_id || null,
+      turnId: argValue(args, '--turn') || parsed.turnId || parsed.turn_id || null,
+      model: argValue(args, '--model') || parsed.model || null
+    });
+  }
+
+  const prompt = argValue(args, '--prompt') || trimmed;
+  if (!prompt.trim()) return null;
+
+  return normalizeTaskEvent({
+    agent: argValue(args, '--agent') || 'custom',
+    prompt,
+    cwd: argValue(args, '--cwd') || process.cwd(),
+    sessionId: argValue(args, '--session') || null,
+    turnId: argValue(args, '--turn') || null,
+    model: argValue(args, '--model') || null
+  });
+}
+
+async function captureCommand(args) {
+  if (process.env.THREETHINGS_CHILD === '1') return;
+
+  const raw = process.stdin.isTTY ? '' : await readStdin();
+  const event = captureEventFromArgs(args, raw);
+  if (!event) {
+    console.log('No task prompt provided. Pipe text/JSON to `3things capture`, or pass `--prompt`.');
+    process.exitCode = 1;
+    return;
+  }
+
+  await handleCapturedTask(event);
 }
 
 function recentTopicTitles() {
@@ -217,7 +284,7 @@ async function chooseLearningArea(task, config, { changeArea = false } = {}) {
 async function runLesson(eventFile, config, { changeArea = false } = {}) {
   const task = loadTask(eventFile || undefined);
   if (!task) {
-    console.log('No Codex task captured yet. Run Codex once, or use `3things init` first.');
+    console.log('No task captured yet. Capture a task first, or use `3things init` for Codex integration.');
     return false;
   }
 
@@ -271,7 +338,7 @@ async function choosePendingTask(currentEventFile) {
   const pending = readPendingTask({ currentEventFile });
   if (!pending) return { action: 'none' };
   const task = loadTask(pending.eventFile);
-  const label = task?.prompt ? `Start this lesson\n   ${preview(task.prompt, 64)}` : 'Start this lesson';
+  const label = task?.prompt ? `Start this lesson\n   ${taskLabel(task, 64)}` : 'Start this lesson';
 
   const choice = await chooseOne('\nNew task is ready:', [
     { value: 'start', label },
@@ -365,6 +432,11 @@ function formatStatus(value) {
   return value ? 'yes' : 'no';
 }
 
+function taskLabel(task, length = 62) {
+  const agent = task.agent || 'unknown';
+  return `[${agent}] ${preview(task.prompt, length)}`;
+}
+
 function statusCommand() {
   const config = loadConfig();
   const latestTask = loadTask();
@@ -380,8 +452,8 @@ function statusCommand() {
   console.log(`terminal mode: ${config.learningTerminalMode}`);
   console.log(`daily area: ${area || 'none'}`);
   console.log(`active session: ${formatStatus(session?.active)}${session?.pid ? ` (pid ${session.pid})` : ''}`);
-  console.log(`pending task: ${pendingTask ? preview(pendingTask.prompt) : 'none'}`);
-  console.log(`latest task: ${latestTask ? `${String(latestTask.capturedAt || '').replace('T', ' ').slice(0, 16)} — ${preview(latestTask.prompt, 62)}` : 'none'}`);
+  console.log(`pending task: ${pendingTask ? taskLabel(pendingTask) : 'none'}`);
+  console.log(`latest task: ${latestTask ? `${String(latestTask.capturedAt || '').replace('T', ' ').slice(0, 16)} — ${taskLabel(latestTask)}` : 'none'}`);
   console.log(`last smart decision: ${decision ? `${decision.launch ? 'launch' : 'skip'}${decision.reason ? ` — ${decision.reason}` : ''}` : 'none'}`);
 }
 
@@ -404,6 +476,7 @@ export async function main(args) {
   if (command === 'status') return statusCommand();
   if (command === 'clear-session') return clearSessionCommand();
   if (command === 'hook') return hookCommand();
+  if (command === 'capture') return captureCommand(args.slice(1));
   if (command === 'learn') return learnCommand(argValue(args, '--event'), { changeArea: args.includes('--change-area') });
   if (command === 'on') return toggle(true);
   if (command === 'off') return toggle(false);

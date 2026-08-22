@@ -202,6 +202,7 @@ export function saveTask(event) {
   const safeId = String(event.turn_id || Date.now()).replace(/[^a-zA-Z0-9._-]/g, '_');
   const file = path.join(tasksDir, `${safeId}.json`);
   const task = {
+    agent: event.agent || 'unknown',
     prompt: event.prompt,
     cwd: event.cwd || process.cwd(),
     sessionId: event.session_id || null,

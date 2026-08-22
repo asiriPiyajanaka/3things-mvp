@@ -25,9 +25,34 @@ test('parseLesson extracts topics and canonical sections', () => {
 
   assert.equal(lessons.length, 2);
   assert.equal(lessons[0].title, 'Repository Boundary');
-  assert.equal(lessons[0].sections['Mental model'], 'A repository boundary says what this codebase owns.');
-  assert.match(lessons[0].sections['How it works'], /src\/ contains product logic/);
-  assert.equal(lessons[1].sections.Remember, 'Observe the task, do not become the task.');
+  assert.equal(lessons[0].sections[0].name, 'Mental model');
+  assert.equal(lessons[0].sections[0].text, 'A repository boundary says what this codebase owns.');
+  assert.equal(lessons[0].sections[1].name, 'How it works');
+  assert.match(lessons[0].sections[1].text, /src\/ contains product logic/);
+  assert.equal(lessons[1].sections[4].name, 'Remember');
+  assert.equal(lessons[1].sections[4].text, 'Observe the task, do not become the task.');
+});
+
+test('parseLesson extracts dynamic markdown sections', () => {
+  const lessons = parseLesson(`
+# Waiting Changes User Trust
+## Why It Matters
+Users need to know whether a tool is working or waiting.
+## What Actually Happens
+- stdout may still be open.
+- a session file may block launch.
+## What To Check
+Look at the active pid and pending task marker.
+`);
+
+  assert.equal(lessons.length, 1);
+  assert.equal(lessons[0].title, 'Waiting Changes User Trust');
+  assert.deepEqual(lessons[0].sections.map((section) => section.name), [
+    'Why It Matters',
+    'What Actually Happens',
+    'What To Check'
+  ]);
+  assert.match(lessons[0].sections[1].text, /stdout may still be open/);
 });
 
 test('renderLesson removes raw markdown and includes learning context', () => {
