@@ -13,6 +13,11 @@ function commandFor(eventFile) {
   return `${shellQuote(process.execPath)} ${shellQuote(cliPath)} learn --event ${shellQuote(eventFile)}`;
 }
 
+export function macTerminalScript(command) {
+  const escaped = command.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return `tell application "Terminal"\nactivate\ndo script "${escaped}"\nend tell`;
+}
+
 function commandExists(name) {
   const checker = process.platform === 'win32' ? 'where' : 'which';
   return spawnSync(checker, [name], { stdio: 'ignore' }).status === 0;
@@ -22,8 +27,7 @@ export function openLearningTerminal(eventFile) {
   const command = commandFor(eventFile);
 
   if (process.platform === 'darwin') {
-    const escaped = command.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    const script = `tell application "Terminal" to do script "${escaped}"`;
+    const script = macTerminalScript(command);
     const child = spawn('osascript', ['-e', script], { detached: true, stdio: 'ignore' });
     child.unref();
     return true;

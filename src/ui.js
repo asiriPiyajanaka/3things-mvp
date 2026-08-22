@@ -51,8 +51,14 @@ function wrapPlain(text, width) {
 function menuLines({ marker, label, active = false, width = terminalLineWidth() }) {
   const firstPrefix = `${marker} `;
   const restPrefix = ' '.repeat(visibleWidth(firstPrefix));
-  const wrapped = wrapPlain(label, Math.max(16, width - visibleWidth(firstPrefix)));
-  const lines = wrapped.map((part, index) => `${index === 0 ? firstPrefix : restPrefix}${part}`);
+  const labelLines = String(label).split('\n');
+  const lines = [];
+
+  labelLines.forEach((labelLine, labelIndex) => {
+    const prefix = labelIndex === 0 ? firstPrefix : restPrefix;
+    const wrapped = wrapPlain(labelLine, Math.max(16, width - visibleWidth(prefix)));
+    lines.push(...wrapped.map((part, index) => `${index === 0 ? prefix : restPrefix}${part}`));
+  });
 
   if (!active || !colorEnabled()) return lines;
   return lines.map((line) => `${ANSI_INVERSE}${ANSI_BOLD}${line}${ANSI_RESET}`);

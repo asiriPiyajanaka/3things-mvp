@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { configPath, historyPath, homeDir, learningSessionPath, latestTaskPath, tasksDir } from './paths.js';
+import { configPath, historyPath, homeDir, learningSessionPath, latestTaskPath, pendingTaskPath, smartDecisionPath, tasksDir } from './paths.js';
 
 export const DEFAULT_INTERESTS = [
   'Frontend',
@@ -115,23 +115,86 @@ export function clearLearningSession() {
   try { fs.rmSync(learningSessionPath, { force: true }); } catch {}
 }
 
-export function hasActiveLearningSession(now = new Date()) {
-  if (!fs.existsSync(learningSessionPath)) return false;
+export function readLearningSession(now = new Date()) {
+  if (!fs.existsSync(learningSessionPath)) return null;
   let session;
   try {
     session = JSON.parse(fs.readFileSync(learningSessionPath, 'utf8'));
   } catch {
     clearLearningSession();
-    return false;
+    return null;
   }
 
-  if (processIsAlive(session.pid)) return true;
-
+  const pidAlive = processIsAlive(session.pid);
   const startedAt = Date.parse(session.startedAt);
-  if (Number.isFinite(startedAt) && now.getTime() - startedAt < LEARNING_SESSION_RESERVATION_MS) return true;
+  const reserved = Number.isFinite(startedAt) && now.getTime() - startedAt < LEARNING_SESSION_RESERVATION_MS;
+  return {
+    ...session,
+    active: pidAlive || reserved,
+    pidAlive,
+    reserved
+  };
+}
 
+export function markPendingTask(eventFile) {
+  writePrivateJson(pendingTaskPath, {
+    eventFile,
+    capturedAt: new Date().toISOString()
+  });
+}
+
+export function clearPendingTask() {
+  try { fs.rmSync(pendingTaskPath, { force: true }); } catch {}
+}
+
+export function readPendingTask({ currentEventFile = null } = {}) {
+  if (!fs.existsSync(pendingTaskPath)) return null;
+  let pending;
+  try {
+    pending = JSON.parse(fs.readFileSync(pendingTaskPath, 'utf8'));
+  } catch {
+    clearPendingTask();
+    return null;
+  }
+
+  if (!pending.eventFile || pending.eventFile === currentEventFile) {
+    clearPendingTask();
+    return null;
+  }
+
+  if (!fs.existsSync(pending.eventFile)) {
+    clearPendingTask();
+    return null;
+  }
+
+  return pending;
+}
+
+export function hasActiveLearningSession(now = new Date()) {
+  const session = readLearningSession(now);
+  if (!session) return false;
+  if (session.active) return true;
   clearLearningSession();
   return false;
+}
+
+export function markSmartDecision({ eventFile, launch, reason }) {
+  writePrivateJson(smartDecisionPath, {
+    eventFile,
+    launch: Boolean(launch),
+    reason: String(reason || '').slice(0, 120),
+    decidedAt: new Date().toISOString()
+  });
+}
+
+export function readSmartDecision() {
+  if (!fs.existsSync(smartDecisionPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(smartDecisionPath, 'utf8'));
+  } catch {
+    try { fs.rmSync(smartDecisionPath, { force: true }); } catch {}
+    return null;
+  }
 }
 
 export function saveTask(event) {

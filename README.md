@@ -77,6 +77,9 @@ Submit a task. With `smart` or `every` mode, 3Things can open a second terminal 
 3things interests
 3things area
 3things history
+3things again
+3things status
+3things clear-session
 3things
 3things on
 3things off
@@ -88,6 +91,12 @@ Submit a task. With `smart` or `every` mode, 3Things can open a second terminal 
 
 `3things signoff` removes local 3Things state under `~/.3things`. Run `3things init` later to start again.
 
+`3things again` replays the latest saved lesson.
+
+`3things status` shows trigger mode, terminal mode, daily area, active session, pending task, latest task, and the last smart-mode decision.
+
+`3things clear-session` clears a stale active learning-session marker.
+
 After you choose a learning area, 3Things reuses it for 24 hours so new lesson terminals can go straight to the three concepts. To change it sooner:
 
 ```bash
@@ -98,7 +107,7 @@ After you choose a learning area, 3Things reuses it for 24 hours so new lesson t
 Terminal mode is configurable:
 
 - `new` opens a new learning terminal for each launched lesson.
-- `single` keeps one learning terminal active at a time. While a lesson is active, new Codex prompts are still captured, but another learning terminal is not opened. Complete the current lesson, then run `3things` in that terminal to learn from the latest captured task.
+- `single` keeps one learning terminal active at a time. While a lesson is active, new eligible Codex prompts are saved as pending. After you choose `Done`, 3Things asks whether to start the pending lesson in the same terminal.
 
 ## Local data
 
@@ -109,6 +118,8 @@ Terminal mode is configurable:
   config.json
   latest-task.json
   learning-session.json
+  pending-task.json
+  smart-decision.json
   history.jsonl
   tasks/
 ```

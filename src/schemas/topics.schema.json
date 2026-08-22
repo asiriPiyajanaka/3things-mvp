@@ -9,8 +9,8 @@
       "items": {
         "type": "object",
         "properties": {
-          "title": { "type": "string" },
-          "why": { "type": "string" }
+          "title": { "type": "string", "minLength": 8, "maxLength": 42 },
+          "why": { "type": "string", "minLength": 12, "maxLength": 60 }
         },
         "required": ["title", "why"],
         "additionalProperties": false
